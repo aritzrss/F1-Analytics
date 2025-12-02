@@ -1,0 +1,268 @@
+Driver,DriverNumber,Team,LapNumber,Compound,TyreLife,FreshTyre,LapTime,LapTimeSeconds,Stint,IsPersonalBest
+VER,1,Red Bull Racing,1,SOFT,1,True,NaT,,1,False
+VER,1,Red Bull Racing,2,SOFT,2,True,0 days 00:01:30.031000,90.031,1,True
+VER,1,Red Bull Racing,3,SOFT,3,True,0 days 00:02:08.726000,128.726,1,False
+VER,1,Red Bull Racing,4,SOFT,4,False,NaT,,2,False
+VER,1,Red Bull Racing,5,SOFT,5,False,0 days 00:01:30.160000,90.16,2,False
+VER,1,Red Bull Racing,6,SOFT,6,False,0 days 00:01:42.855000,102.855,2,False
+VER,1,Red Bull Racing,7,SOFT,1,True,NaT,,3,False
+VER,1,Red Bull Racing,8,SOFT,2,True,0 days 00:01:29.374000,89.374,3,True
+VER,1,Red Bull Racing,9,SOFT,3,True,0 days 00:01:56.873000,116.873,3,False
+VER,1,Red Bull Racing,10,SOFT,4,False,NaT,,4,False
+VER,1,Red Bull Racing,11,SOFT,5,False,0 days 00:01:37.787000,97.787,4,False
+VER,1,Red Bull Racing,12,SOFT,1,True,NaT,,5,False
+VER,1,Red Bull Racing,13,SOFT,2,True,0 days 00:01:29.421000,89.421,5,True
+VER,1,Red Bull Racing,14,SOFT,3,True,0 days 00:01:52.745000,112.745,5,False
+VER,1,Red Bull Racing,15,SOFT,1,True,NaT,,6,False
+VER,1,Red Bull Racing,16,SOFT,2,True,0 days 00:01:29.179000,89.179,6,True
+VER,1,Red Bull Racing,17,SOFT,3,True,0 days 00:01:59.683000,119.683,6,False
+LEC,16,Ferrari,1,MEDIUM,1,True,NaT,,1,False
+LEC,16,Ferrari,2,MEDIUM,2,True,0 days 00:01:31.260000,91.26,1,True
+LEC,16,Ferrari,3,MEDIUM,3,True,0 days 00:01:51.926000,111.926,1,False
+LEC,16,Ferrari,4,SOFT,1,True,NaT,,2,False
+LEC,16,Ferrari,5,SOFT,2,True,0 days 00:01:30.243000,90.243,2,True
+LEC,16,Ferrari,6,SOFT,3,True,0 days 00:01:48.538000,108.538,2,False
+LEC,16,Ferrari,7,SOFT,1,True,NaT,,3,False
+LEC,16,Ferrari,8,SOFT,4,False,NaT,,4,False
+LEC,16,Ferrari,9,SOFT,5,False,0 days 00:01:30.094000,90.094,4,True
+LEC,16,Ferrari,10,SOFT,6,False,0 days 00:01:47.230000,107.23,4,False
+LEC,16,Ferrari,11,SOFT,1,True,NaT,,5,False
+LEC,16,Ferrari,12,SOFT,2,True,0 days 00:01:29.165000,89.165,5,True
+LEC,16,Ferrari,13,SOFT,3,True,0 days 00:02:02.605000,122.605,5,False
+LEC,16,Ferrari,14,SOFT,2,False,NaT,,6,False
+LEC,16,Ferrari,15,SOFT,3,False,0 days 00:01:29.480000,89.48,6,True
+LEC,16,Ferrari,16,SOFT,4,False,0 days 00:01:51.690000,111.69,6,False
+LEC,16,Ferrari,17,SOFT,1,True,NaT,,7,False
+LEC,16,Ferrari,18,SOFT,2,True,0 days 00:01:29.407000,89.407,7,True
+LEC,16,Ferrari,19,SOFT,3,True,0 days 00:02:01.348000,121.348,7,False
+RUS,63,Mercedes,1,SOFT,1,True,NaT,,1,False
+RUS,63,Mercedes,2,SOFT,2,True,0 days 00:01:30.350000,90.35,1,True
+RUS,63,Mercedes,3,SOFT,3,True,0 days 00:02:04.720000,124.72,1,False
+RUS,63,Mercedes,4,SOFT,4,False,NaT,,2,False
+RUS,63,Mercedes,5,SOFT,5,False,0 days 00:02:09.967000,129.967,2,False
+RUS,63,Mercedes,6,SOFT,6,False,NaT,,3,False
+RUS,63,Mercedes,7,SOFT,7,False,0 days 00:01:30.698000,90.698,3,True
+RUS,63,Mercedes,8,SOFT,8,False,0 days 00:01:47.025000,107.025,3,False
+RUS,63,Mercedes,9,SOFT,1,True,NaT,,4,False
+RUS,63,Mercedes,10,SOFT,2,True,0 days 00:01:29.922000,89.922,4,True
+RUS,63,Mercedes,11,SOFT,3,True,0 days 00:02:06.521000,126.521,4,False
+RUS,63,Mercedes,12,SOFT,1,True,NaT,,5,False
+RUS,63,Mercedes,13,SOFT,2,True,0 days 00:01:29.603000,89.603,5,True
+RUS,63,Mercedes,14,SOFT,3,True,0 days 00:02:05.430000,125.43,5,False
+RUS,63,Mercedes,15,SOFT,1,True,NaT,,6,False
+RUS,63,Mercedes,16,SOFT,2,True,0 days 00:01:29.485000,89.485,6,True
+RUS,63,Mercedes,17,SOFT,3,True,0 days 00:02:09.274000,129.274,6,False
+SAI,55,Ferrari,1,MEDIUM,1,True,NaT,,1,False
+SAI,55,Ferrari,2,MEDIUM,2,True,0 days 00:01:31.208000,91.208,1,True
+SAI,55,Ferrari,3,MEDIUM,3,True,0 days 00:01:59.562000,119.562,1,False
+SAI,55,Ferrari,4,SOFT,1,True,NaT,,2,False
+SAI,55,Ferrari,5,SOFT,2,True,0 days 00:01:29.909000,89.909,2,True
+SAI,55,Ferrari,6,SOFT,3,True,0 days 00:01:48.457000,108.457,2,False
+SAI,55,Ferrari,7,SOFT,4,False,NaT,,3,False
+SAI,55,Ferrari,8,SOFT,5,False,0 days 00:01:30.425000,90.425,3,True
+SAI,55,Ferrari,9,SOFT,6,False,0 days 00:01:48.846000,108.846,3,False
+SAI,55,Ferrari,10,SOFT,1,True,NaT,,4,False
+SAI,55,Ferrari,11,SOFT,2,True,0 days 00:01:29.573000,89.573,4,True
+SAI,55,Ferrari,12,SOFT,3,True,0 days 00:01:52.447000,112.447,4,False
+SAI,55,Ferrari,13,SOFT,1,True,NaT,,5,False
+SAI,55,Ferrari,14,SOFT,2,True,0 days 00:01:29.608000,89.608,5,True
+SAI,55,Ferrari,15,SOFT,3,True,0 days 00:01:55.236000,115.236,5,False
+SAI,55,Ferrari,16,SOFT,1,True,NaT,,6,False
+SAI,55,Ferrari,17,SOFT,2,True,0 days 00:01:29.507000,89.507,6,True
+SAI,55,Ferrari,18,SOFT,3,True,NaT,,6,False
+PER,11,Red Bull Racing,1,SOFT,1,True,NaT,,1,False
+PER,11,Red Bull Racing,2,SOFT,2,True,0 days 00:01:30.221000,90.221,1,True
+PER,11,Red Bull Racing,3,SOFT,3,True,0 days 00:02:02.063000,122.063,1,False
+PER,11,Red Bull Racing,4,SOFT,4,False,NaT,,2,False
+PER,11,Red Bull Racing,5,SOFT,5,False,0 days 00:01:30.500000,90.5,2,False
+PER,11,Red Bull Racing,6,SOFT,6,False,0 days 00:01:53.606000,113.606,2,False
+PER,11,Red Bull Racing,7,SOFT,1,True,NaT,,3,False
+PER,11,Red Bull Racing,8,SOFT,2,True,0 days 00:01:29.932000,89.932,3,True
+PER,11,Red Bull Racing,9,SOFT,3,True,0 days 00:01:52.254000,112.254,3,False
+PER,11,Red Bull Racing,10,SOFT,1,True,NaT,,4,False
+PER,11,Red Bull Racing,11,SOFT,2,True,0 days 00:02:07.938000,127.938,4,False
+PER,11,Red Bull Racing,12,SOFT,3,False,NaT,,5,False
+PER,11,Red Bull Racing,13,SOFT,4,False,0 days 00:01:30.030000,90.03,5,True
+PER,11,Red Bull Racing,14,SOFT,5,False,0 days 00:01:47.564000,107.564,5,False
+PER,11,Red Bull Racing,15,SOFT,1,True,NaT,,6,False
+PER,11,Red Bull Racing,16,SOFT,2,True,0 days 00:01:29.537000,89.537,6,True
+PER,11,Red Bull Racing,17,SOFT,3,True,NaT,,6,False
+ALO,14,Aston Martin,1,SOFT,1,True,NaT,,1,False
+ALO,14,Aston Martin,2,SOFT,2,True,0 days 00:01:30.179000,90.179,1,True
+ALO,14,Aston Martin,3,SOFT,3,True,0 days 00:02:04.550000,124.55,1,False
+ALO,14,Aston Martin,4,SOFT,4,False,NaT,,2,False
+ALO,14,Aston Martin,5,SOFT,5,False,0 days 00:01:53.925000,113.925,2,False
+ALO,14,Aston Martin,6,SOFT,1,True,NaT,,3,False
+ALO,14,Aston Martin,7,SOFT,2,True,0 days 00:01:30.136000,90.136,3,True
+ALO,14,Aston Martin,8,SOFT,3,True,0 days 00:01:59.624000,119.624,3,False
+ALO,14,Aston Martin,9,SOFT,1,True,NaT,,4,False
+ALO,14,Aston Martin,10,SOFT,2,True,0 days 00:01:29.801000,89.801,4,True
+ALO,14,Aston Martin,11,SOFT,3,True,0 days 00:02:01.157000,121.157,4,False
+ALO,14,Aston Martin,12,SOFT,1,True,NaT,,5,False
+ALO,14,Aston Martin,13,SOFT,2,True,0 days 00:01:29.542000,89.542,5,True
+ALO,14,Aston Martin,14,SOFT,3,True,0 days 00:02:07.513000,127.513,5,False
+NOR,4,McLaren,1,SOFT,1,True,NaT,,1,False
+NOR,4,McLaren,2,SOFT,2,True,0 days 00:01:30.143000,90.143,1,True
+NOR,4,McLaren,3,SOFT,3,True,0 days 00:01:55.890000,115.89,1,False
+NOR,4,McLaren,4,SOFT,1,True,NaT,,2,False
+NOR,4,McLaren,5,SOFT,2,False,NaT,,3,False
+NOR,4,McLaren,6,SOFT,3,False,0 days 00:01:29.941000,89.941,3,True
+NOR,4,McLaren,7,SOFT,4,False,0 days 00:01:54.087000,114.087,3,False
+NOR,4,McLaren,8,SOFT,1,True,NaT,,4,False
+NOR,4,McLaren,9,SOFT,2,True,0 days 00:01:56.053000,116.053,4,False
+NOR,4,McLaren,10,SOFT,3,False,NaT,,5,False
+NOR,4,McLaren,11,SOFT,4,False,0 days 00:01:29.679000,89.679,5,True
+NOR,4,McLaren,12,SOFT,5,False,0 days 00:01:46.285000,106.285,5,False
+NOR,4,McLaren,13,SOFT,1,True,NaT,,6,False
+NOR,4,McLaren,14,SOFT,2,True,0 days 00:01:29.614000,89.614,6,True
+NOR,4,McLaren,15,SOFT,3,True,NaT,,6,False
+PIA,81,McLaren,1,SOFT,1,True,NaT,,1,False
+PIA,81,McLaren,2,SOFT,2,True,0 days 00:01:30.692000,90.692,1,True
+PIA,81,McLaren,3,SOFT,3,True,0 days 00:01:56.380000,116.38,1,False
+PIA,81,McLaren,4,SOFT,1,True,NaT,,2,False
+PIA,81,McLaren,5,SOFT,2,True,0 days 00:01:30.531000,90.531,2,True
+PIA,81,McLaren,6,SOFT,3,True,0 days 00:01:57.365000,117.365,2,False
+PIA,81,McLaren,7,SOFT,4,False,NaT,,3,False
+PIA,81,McLaren,8,SOFT,5,False,0 days 00:01:30.624000,90.624,3,True
+PIA,81,McLaren,9,SOFT,6,False,0 days 00:01:52.289000,112.289,3,False
+PIA,81,McLaren,10,SOFT,1,True,NaT,,4,False
+PIA,81,McLaren,11,SOFT,2,True,0 days 00:01:30.122000,90.122,4,True
+PIA,81,McLaren,12,SOFT,3,True,0 days 00:01:57.278000,117.278,4,False
+PIA,81,McLaren,13,SOFT,4,False,NaT,,5,False
+PIA,81,McLaren,14,SOFT,5,False,0 days 00:01:30.651000,90.651,5,True
+PIA,81,McLaren,15,SOFT,6,False,0 days 00:01:48.367000,108.367,5,False
+PIA,81,McLaren,16,SOFT,1,True,NaT,,6,False
+PIA,81,McLaren,17,SOFT,2,True,0 days 00:01:29.683000,89.683,6,True
+PIA,81,McLaren,18,SOFT,3,True,NaT,,6,False
+HAM,44,Mercedes,1,SOFT,1,True,NaT,,1,False
+HAM,44,Mercedes,2,SOFT,2,True,0 days 00:01:30.806000,90.806,1,True
+HAM,44,Mercedes,3,SOFT,3,True,0 days 00:01:55.826000,115.826,1,False
+HAM,44,Mercedes,4,SOFT,1,True,NaT,,2,False
+HAM,44,Mercedes,5,SOFT,2,True,0 days 00:01:30.451000,90.451,2,True
+HAM,44,Mercedes,6,SOFT,3,True,0 days 00:01:55.724000,115.724,2,False
+HAM,44,Mercedes,7,SOFT,4,False,NaT,,3,False
+HAM,44,Mercedes,8,SOFT,5,False,0 days 00:01:30.363000,90.363,3,True
+HAM,44,Mercedes,9,SOFT,6,False,0 days 00:01:44.321000,104.321,3,False
+HAM,44,Mercedes,10,SOFT,1,True,NaT,,4,False
+HAM,44,Mercedes,11,SOFT,2,True,0 days 00:01:29.718000,89.718,4,True
+HAM,44,Mercedes,12,SOFT,3,True,0 days 00:01:59.366000,119.366,4,False
+HAM,44,Mercedes,13,SOFT,4,False,NaT,,5,False
+HAM,44,Mercedes,14,SOFT,5,False,0 days 00:01:30.445000,90.445,5,True
+HAM,44,Mercedes,15,SOFT,6,False,0 days 00:01:47.151000,107.151,5,False
+HAM,44,Mercedes,16,SOFT,1,True,NaT,,6,False
+HAM,44,Mercedes,17,SOFT,2,True,0 days 00:01:29.710000,89.71,6,True
+HAM,44,Mercedes,18,SOFT,3,True,NaT,,6,False
+HUL,27,Haas F1 Team,1,SOFT,1,True,NaT,,1,False
+HUL,27,Haas F1 Team,2,SOFT,2,True,0 days 00:01:30.623000,90.623,1,True
+HUL,27,Haas F1 Team,3,SOFT,3,True,0 days 00:01:55.586000,115.586,1,False
+HUL,27,Haas F1 Team,4,SOFT,1,True,NaT,,2,False
+HUL,27,Haas F1 Team,5,SOFT,2,True,0 days 00:01:30.566000,90.566,2,True
+HUL,27,Haas F1 Team,6,SOFT,3,True,0 days 00:01:51.635000,111.635,2,False
+HUL,27,Haas F1 Team,7,SOFT,4,False,NaT,,3,False
+HUL,27,Haas F1 Team,8,SOFT,5,False,0 days 00:01:30.997000,90.997,3,True
+HUL,27,Haas F1 Team,9,SOFT,6,False,0 days 00:01:51.641000,111.641,3,False
+HUL,27,Haas F1 Team,10,SOFT,1,True,NaT,,4,False
+HUL,27,Haas F1 Team,11,SOFT,2,True,0 days 00:01:29.851000,89.851,4,True
+HUL,27,Haas F1 Team,12,SOFT,3,True,0 days 00:01:52.113000,112.113,4,False
+HUL,27,Haas F1 Team,13,SOFT,4,False,NaT,,5,False
+HUL,27,Haas F1 Team,14,SOFT,5,False,0 days 00:01:30.502000,90.502,5,True
+HUL,27,Haas F1 Team,15,SOFT,6,False,0 days 00:01:45.117000,105.117,5,False
+HUL,27,Haas F1 Team,16,SOFT,4,False,NaT,,6,False
+HUL,27,Haas F1 Team,17,SOFT,5,False,0 days 00:01:30.616000,90.616,6,False
+HUL,27,Haas F1 Team,18,SOFT,6,False,NaT,,6,False
+TSU,22,RB,1,SOFT,1,True,NaT,,1,False
+TSU,22,RB,2,SOFT,2,True,0 days 00:01:30.881000,90.881,1,True
+TSU,22,RB,3,SOFT,3,True,0 days 00:01:51.134000,111.134,1,False
+TSU,22,RB,4,SOFT,1,True,NaT,,2,False
+TSU,22,RB,5,SOFT,2,True,0 days 00:01:30.481000,90.481,2,True
+TSU,22,RB,6,SOFT,3,True,0 days 00:01:54.230000,114.23,2,False
+TSU,22,RB,7,SOFT,4,False,NaT,,3,False
+TSU,22,RB,8,SOFT,5,False,0 days 00:01:31.102000,91.102,3,True
+TSU,22,RB,9,SOFT,6,False,0 days 00:01:43.233000,103.233,3,False
+TSU,22,RB,10,SOFT,1,True,NaT,,4,False
+TSU,22,RB,11,SOFT,2,True,0 days 00:01:30.129000,90.129,4,True
+TSU,22,RB,12,SOFT,3,True,0 days 00:01:55.713000,115.713,4,False
+STR,18,Aston Martin,1,SOFT,1,True,NaT,,1,False
+STR,18,Aston Martin,2,SOFT,2,True,0 days 00:01:30.864000,90.864,1,True
+STR,18,Aston Martin,3,SOFT,3,True,0 days 00:01:48.264000,108.264,1,False
+STR,18,Aston Martin,4,SOFT,1,True,NaT,,2,False
+STR,18,Aston Martin,5,SOFT,2,True,0 days 00:01:29.965000,89.965,2,True
+STR,18,Aston Martin,6,SOFT,3,True,0 days 00:01:57.189000,117.189,2,False
+STR,18,Aston Martin,7,SOFT,4,False,NaT,,3,False
+STR,18,Aston Martin,8,SOFT,5,False,0 days 00:01:30.982000,90.982,3,True
+STR,18,Aston Martin,9,SOFT,6,False,0 days 00:01:47.744000,107.744,3,False
+STR,18,Aston Martin,10,SOFT,1,True,NaT,,4,False
+STR,18,Aston Martin,11,SOFT,2,True,0 days 00:01:30.200000,90.2,4,True
+STR,18,Aston Martin,12,SOFT,3,True,0 days 00:02:05.006000,125.006,4,False
+ALB,23,Williams,1,SOFT,1,True,NaT,,1,False
+ALB,23,Williams,2,SOFT,2,True,0 days 00:01:30.692000,90.692,1,True
+ALB,23,Williams,3,SOFT,3,True,0 days 00:01:56.649000,116.649,1,False
+ALB,23,Williams,4,SOFT,1,True,NaT,,2,False
+ALB,23,Williams,5,SOFT,2,True,0 days 00:01:30.397000,90.397,2,True
+ALB,23,Williams,6,SOFT,3,True,0 days 00:02:04.142000,124.142,2,False
+ALB,23,Williams,7,SOFT,4,False,NaT,,3,False
+ALB,23,Williams,8,SOFT,5,False,0 days 00:01:31.152000,91.152,3,True
+ALB,23,Williams,9,SOFT,6,False,0 days 00:01:46.670000,106.67,3,False
+ALB,23,Williams,10,SOFT,1,True,NaT,,4,False
+ALB,23,Williams,11,SOFT,2,True,0 days 00:01:30.221000,90.221,4,True
+ALB,23,Williams,12,SOFT,3,True,0 days 00:02:07.201000,127.201,4,False
+RIC,3,RB,1,SOFT,1,True,NaT,,1,False
+RIC,3,RB,2,SOFT,2,True,0 days 00:01:31.025000,91.025,1,True
+RIC,3,RB,3,SOFT,3,True,0 days 00:01:52.409000,112.409,1,False
+RIC,3,RB,4,SOFT,1,True,NaT,,2,False
+RIC,3,RB,5,SOFT,2,True,0 days 00:01:30.562000,90.562,2,True
+RIC,3,RB,6,SOFT,3,True,0 days 00:01:51.968000,111.968,2,False
+RIC,3,RB,7,SOFT,4,False,NaT,,3,False
+RIC,3,RB,8,SOFT,5,False,0 days 00:01:31.126000,91.126,3,True
+RIC,3,RB,9,SOFT,6,False,0 days 00:01:48.368000,108.368,3,False
+RIC,3,RB,10,SOFT,1,True,NaT,,4,False
+RIC,3,RB,11,SOFT,2,True,0 days 00:01:30.278000,90.278,4,True
+RIC,3,RB,12,SOFT,3,True,0 days 00:01:56.019000,116.019,4,False
+MAG,20,Haas F1 Team,1,SOFT,1,True,NaT,,1,False
+MAG,20,Haas F1 Team,2,SOFT,2,True,0 days 00:01:31.252000,91.252,1,True
+MAG,20,Haas F1 Team,3,SOFT,3,True,0 days 00:01:43.574000,103.574,1,False
+MAG,20,Haas F1 Team,4,SOFT,1,True,NaT,,2,False
+MAG,20,Haas F1 Team,5,SOFT,2,True,0 days 00:01:30.646000,90.646,2,True
+MAG,20,Haas F1 Team,6,SOFT,3,True,0 days 00:02:04.061000,124.061,2,False
+MAG,20,Haas F1 Team,7,SOFT,4,False,NaT,,3,False
+MAG,20,Haas F1 Team,8,SOFT,5,False,0 days 00:01:31.170000,91.17,3,True
+MAG,20,Haas F1 Team,9,SOFT,6,False,0 days 00:01:46.691000,106.691,3,False
+MAG,20,Haas F1 Team,10,SOFT,1,True,NaT,,4,False
+MAG,20,Haas F1 Team,11,SOFT,2,True,0 days 00:01:30.529000,90.529,4,True
+MAG,20,Haas F1 Team,12,SOFT,3,True,0 days 00:01:47.834000,107.834,4,False
+BOT,77,Kick Sauber,1,SOFT,1,True,NaT,,1,False
+BOT,77,Kick Sauber,2,SOFT,2,True,0 days 00:01:31.077000,91.077,1,True
+BOT,77,Kick Sauber,3,SOFT,3,True,0 days 00:01:52.534000,112.534,1,False
+BOT,77,Kick Sauber,4,SOFT,1,True,NaT,,2,False
+BOT,77,Kick Sauber,5,SOFT,2,True,0 days 00:01:30.756000,90.756,2,True
+BOT,77,Kick Sauber,6,SOFT,3,True,0 days 00:02:06.222000,126.222,2,False
+ZHO,24,Kick Sauber,1,SOFT,1,True,NaT,,1,False
+ZHO,24,Kick Sauber,2,SOFT,2,True,0 days 00:01:31.075000,91.075,1,True
+ZHO,24,Kick Sauber,3,SOFT,3,True,0 days 00:01:48.821000,108.821,1,False
+ZHO,24,Kick Sauber,4,SOFT,1,True,NaT,,2,False
+ZHO,24,Kick Sauber,5,SOFT,2,True,0 days 00:01:30.757000,90.757,2,True
+ZHO,24,Kick Sauber,6,SOFT,3,True,0 days 00:01:57.631000,117.631,2,False
+SAR,2,Williams,1,SOFT,1,True,NaT,,1,False
+SAR,2,Williams,2,SOFT,2,True,0 days 00:01:30.770000,90.77,1,True
+SAR,2,Williams,3,SOFT,3,True,0 days 00:01:54.600000,114.6,1,False
+SAR,2,Williams,4,SOFT,1,True,NaT,,2,False
+SAR,2,Williams,5,SOFT,2,True,0 days 00:01:31.128000,91.128,2,False
+SAR,2,Williams,6,SOFT,3,True,0 days 00:01:59.862000,119.862,2,False
+OCO,31,Alpine,1,MEDIUM,1,True,NaT,,1,False
+OCO,31,Alpine,2,MEDIUM,2,True,0 days 00:01:31.990000,91.99,1,True
+OCO,31,Alpine,3,MEDIUM,3,True,0 days 00:01:55.505000,115.505,1,False
+OCO,31,Alpine,4,SOFT,1,True,NaT,,2,False
+OCO,31,Alpine,5,SOFT,2,True,0 days 00:01:31.261000,91.261,2,True
+OCO,31,Alpine,6,SOFT,3,True,0 days 00:01:50.437000,110.437,2,False
+OCO,31,Alpine,7,SOFT,1,True,NaT,,3,False
+OCO,31,Alpine,8,SOFT,2,True,0 days 00:01:30.793000,90.793,3,True
+OCO,31,Alpine,9,SOFT,3,True,0 days 00:02:07.493000,127.493,3,False
+GAS,10,Alpine,1,MEDIUM,1,True,NaT,,1,False
+GAS,10,Alpine,2,MEDIUM,2,True,0 days 00:01:32.434000,92.434,1,True
+GAS,10,Alpine,3,MEDIUM,3,True,0 days 00:01:49.853000,109.853,1,False
+GAS,10,Alpine,4,SOFT,1,True,NaT,,2,False
+GAS,10,Alpine,5,SOFT,2,True,0 days 00:01:31.281000,91.281,2,True
+GAS,10,Alpine,6,SOFT,3,True,0 days 00:01:49.747000,109.747,2,False
+GAS,10,Alpine,7,SOFT,1,True,NaT,,3,False
+GAS,10,Alpine,8,SOFT,2,True,0 days 00:01:30.948000,90.948,3,True
+GAS,10,Alpine,9,SOFT,3,True,0 days 00:02:02.150000,122.15,3,False

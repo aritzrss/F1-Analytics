@@ -1,0 +1,72 @@
+Driver,DriverNumber,Team,LapNumber,Compound,TyreLife,FreshTyre,LapTime,LapTimeSeconds,Stint,IsPersonalBest
+RIC,3,RB,1,MEDIUM,1,True,NaT,,1,False
+RIC,3,RB,2,INTERMEDIATE,1,True,NaT,,2,False
+RIC,3,RB,3,INTERMEDIATE,2,True,0 days 00:01:46.461000,106.461,2,True
+RIC,3,RB,4,INTERMEDIATE,3,True,0 days 00:02:06.033000,126.033,2,False
+RIC,3,RB,5,INTERMEDIATE,4,True,0 days 00:01:41.913000,101.913,2,True
+RIC,3,RB,6,INTERMEDIATE,5,True,0 days 00:02:17.002000,137.002,2,False
+RIC,3,RB,7,INTERMEDIATE,6,False,NaT,,3,False
+RIC,3,RB,8,INTERMEDIATE,7,False,0 days 00:02:00.276000,120.276,3,False
+RIC,3,RB,9,INTERMEDIATE,8,False,NaT,,3,False
+NOR,4,McLaren,1,SOFT,1,True,NaT,,1,False
+NOR,4,McLaren,2,SOFT,2,True,0 days 00:01:44.977000,104.977,1,True
+NOR,4,McLaren,3,SOFT,3,True,0 days 00:02:17.847000,137.847,1,False
+LEC,16,Ferrari,1,SOFT,1,True,NaT,,1,False
+LEC,16,Ferrari,2,SOFT,2,True,0 days 00:01:38.760000,98.76,1,True
+LEC,16,Ferrari,3,SOFT,3,True,0 days 00:02:12.382000,132.382,1,False
+LEC,16,Ferrari,4,SOFT,4,True,0 days 00:02:10.795000,130.795,1,False
+MAG,20,Haas F1 Team,1,SOFT,1,True,NaT,,1,False
+MAG,20,Haas F1 Team,2,INTERMEDIATE,1,True,NaT,,2,False
+MAG,20,Haas F1 Team,3,INTERMEDIATE,2,True,NaT,,2,False
+MAG,20,Haas F1 Team,4,INTERMEDIATE,3,True,NaT,,2,False
+TSU,22,RB,1,INTERMEDIATE,1,True,NaT,,1,False
+TSU,22,RB,2,INTERMEDIATE,2,True,0 days 00:01:42.304000,102.304,1,True
+TSU,22,RB,3,INTERMEDIATE,3,True,0 days 00:02:10.081000,130.081,1,False
+TSU,22,RB,4,INTERMEDIATE,4,True,0 days 00:01:40.946000,100.946,1,True
+TSU,22,RB,5,INTERMEDIATE,5,True,0 days 00:02:06.757000,126.757,1,False
+TSU,22,RB,6,INTERMEDIATE,6,False,NaT,,2,False
+TSU,22,RB,7,INTERMEDIATE,7,False,0 days 00:02:11.371000,131.371,2,False
+TSU,22,RB,8,INTERMEDIATE,8,False,NaT,,2,False
+ALB,23,Williams,1,INTERMEDIATE,1,True,NaT,,1,False
+ALB,23,Williams,2,INTERMEDIATE,2,False,NaT,,2,False
+ALB,23,Williams,3,INTERMEDIATE,3,False,NaT,,3,False
+ALB,23,Williams,4,INTERMEDIATE,4,False,0 days 00:02:03.821000,123.821,3,True
+ALB,23,Williams,5,INTERMEDIATE,5,False,NaT,,3,False
+ZHO,24,Kick Sauber,1,INTERMEDIATE,1,True,NaT,,1,False
+ZHO,24,Kick Sauber,2,INTERMEDIATE,2,False,NaT,,2,False
+ZHO,24,Kick Sauber,3,INTERMEDIATE,3,False,NaT,,3,False
+ZHO,24,Kick Sauber,4,INTERMEDIATE,4,False,NaT,,4,False
+ZHO,24,Kick Sauber,5,SOFT,1,True,0 days 00:02:29.346000,149.346,5,False
+ZHO,24,Kick Sauber,6,SOFT,2,True,0 days 00:02:03.317000,123.317,5,True
+ZHO,24,Kick Sauber,7,SOFT,3,True,0 days 00:02:24.762000,144.762,5,False
+HUL,27,Haas F1 Team,1,SOFT,1,True,NaT,,1,False
+HUL,27,Haas F1 Team,2,SOFT,2,True,0 days 00:01:49.473000,109.473,1,False
+HUL,27,Haas F1 Team,3,SOFT,3,False,NaT,,2,False
+HUL,27,Haas F1 Team,4,SOFT,4,False,0 days 00:01:55.179000,115.179,2,True
+HUL,27,Haas F1 Team,5,SOFT,5,False,0 days 00:02:28.205000,148.205,2,False
+OCO,31,Alpine,1,SOFT,1,True,NaT,,1,False
+OCO,31,Alpine,2,SOFT,2,True,0 days 00:01:59.113000,119.113,1,True
+OCO,31,Alpine,3,SOFT,3,True,NaT,,1,False
+HAM,44,Mercedes,1,MEDIUM,1,True,NaT,,1,False
+HAM,44,Mercedes,2,MEDIUM,2,True,0 days 00:01:54.943000,114.943,1,False
+HAM,44,Mercedes,3,SOFT,1,True,NaT,,2,False
+HAM,44,Mercedes,4,SOFT,2,True,0 days 00:01:35.226000,95.226,2,True
+HAM,44,Mercedes,5,SOFT,3,True,0 days 00:02:04.276000,124.276,2,False
+HAM,44,Mercedes,6,SOFT,4,True,0 days 00:02:28.523000,148.523,2,False
+SAI,55,Ferrari,1,SOFT,1,True,NaT,,1,False
+SAI,55,Ferrari,2,SOFT,2,True,0 days 00:01:52.579000,112.579,1,True
+SAI,55,Ferrari,3,SOFT,3,True,0 days 00:02:27.469000,147.469,1,False
+BOT,77,Kick Sauber,1,INTERMEDIATE,1,True,NaT,,1,False
+BOT,77,Kick Sauber,2,INTERMEDIATE,2,False,NaT,,2,False
+BOT,77,Kick Sauber,3,INTERMEDIATE,3,False,NaT,,3,False
+BOT,77,Kick Sauber,4,INTERMEDIATE,4,False,NaT,,4,False
+BOT,77,Kick Sauber,5,SOFT,1,True,0 days 00:02:23.811000,143.811,5,False
+BOT,77,Kick Sauber,6,SOFT,2,True,0 days 00:01:56.059000,116.059,5,True
+BOT,77,Kick Sauber,7,SOFT,3,True,NaT,,5,False
+PIA,81,McLaren,1,INTERMEDIATE,1,True,NaT,,1,False
+PIA,81,McLaren,2,SOFT,1,True,NaT,,2,False
+PIA,81,McLaren,3,SOFT,2,True,0 days 00:01:39.105000,99.105,2,True
+PIA,81,McLaren,4,SOFT,3,True,0 days 00:01:36.862000,96.862,2,True
+PIA,81,McLaren,5,SOFT,4,True,0 days 00:01:34.725000,94.725,2,True
+PIA,81,McLaren,6,SOFT,5,True,0 days 00:01:53.042000,113.042,2,False
+PIA,81,McLaren,7,SOFT,6,True,0 days 00:02:22.459000,142.459,2,False
