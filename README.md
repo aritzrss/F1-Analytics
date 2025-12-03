@@ -149,6 +149,42 @@ Archivo: `feature_extraction/module2_signals.py`
 - **Compuesto y desgaste**: boxplots por `Compound` para LapTime/Energy/Jerk y scatter `TyreLife` vs LapTime/Energy permiten evaluar si compuesto y edad del neumático impactan la suavidad y el ritmo (p.ej., neumáticos más frescos con menor jerk y menor Energy_Index).
 - **Correlación global**: el heatmap anotado resume qué features tienen mayor relación con el LapTime; típicamente `Avg_Speed_mps` y `MeanAbs_Jerk_Long` emergen como relevantes. Esto orienta la selección de variables para PCA y modelado.
 
+## Módulo 3 – Ingeniería de features y PCA
+
+Archivo: `feature_extraction/module3_pca.py`
+
+### Qué hace
+- Lee `lap_features_module2.csv` (artefactos de Módulo 2).
+- Construye una matriz de features numéricas (`LapTimeSeconds`, `Energy_Index`, `MeanAbs_Jerk_*`, `Avg_Speed_mps`, `Brake_Aggression`, `Max_*_g`, `TyreLife`) y añade dummies de `Compound`.
+- Estandariza con `StandardScaler` y aplica PCA (`n_components=3` por defecto).
+- Persiste:
+  - `pca_scores_module3.csv`: PC1/PC2/PC3 + metadatos (Driver, LapNumber, Compound).
+  - `pca_model_module3.json`: varianza explicada, loadings (componentes), medias/escalas del scaler y nombres de features.
+
+### Uso rápido
+```bash
+python feature_extraction/module3_pca.py
+```
+o con `uv`:
+```bash
+uv run python feature_extraction/module3_pca.py
+```
+Por defecto consume `data/module1_ingestion/2024_Bahrain_Grand_Prix_R/lap_features_module2.csv` y genera los artefactos en el mismo directorio.
+
+### Teoría y lectura del PCA
+- PCA busca vectores ortogonales (componentes principales) que maximizan la varianza de los datos estandarizados. PC1 captura la mayor varianza, PC2 la siguiente, etc. Las “loadings” son las proyecciones de cada feature en estos ejes (componentes de los eigenvectores de la matriz de covarianza).
+- Estandarización: imprescindible porque las features tienen unidades distintas (s, m/s, m/s³, g). Se resta la media y se divide por la desviación estándar antes del PCA.
+- Interpretación: PC1/PC2 pueden separar “estilo de conducción” (jerk, brake aggression) de “condición del coche” (energía, velocidad media, compuesto). Un loading alto (en valor absoluto) indica que la feature contribuye fuertemente a esa componente. La varianza explicada indica cuánta información retienen PC1/PC2; si suman >60% ya dan buena visualización 2D.
+- Gráficos sugeridos (añadidos en `notebooks/tests.ipynb`):
+  - Dispersión PC1 vs PC2 coloreada por piloto (clusters de estilo).
+  - Dispersión PC1 vs PC2 coloreada por compuesto (impacto de neumático).
+  - Tabla de loadings ordenada para PC1/PC2 (qué físicas dominan cada eje).
+
+### Resultados y visualización (artefactos ejecutados)
+- Los scores y el modelo quedan en `pca_scores_module3.csv` y `pca_model_module3.json`. El notebook carga estos artefactos, grafica la varianza explicada (barras + acumulada) y muestra loadings ordenados (magnitud de contribución por feature).
+- Las dispersión PC1 vs PC2 se colorea por piloto y por compuesto para ver si hay clusters de estilo (jerk/agresividad) vs efectos de neumático. PC1 vs LapTimeSeconds permite comprobar si PC1 captura principalmente ritmo.
+- Los loadings muestran qué variables dominan PC1/PC2; una magnitud alta en jerk o brake aggression sugiere eje de “suavidad/estilo”, mientras que alta en Avg_Speed/Energy/Compound indica eje más ligado a rendimiento del coche/neumático.
+
 ### Uso rápido
 ```bash
 python feature_extraction/module2_signals.py
