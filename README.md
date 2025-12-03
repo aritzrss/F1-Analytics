@@ -118,8 +118,36 @@ Archivo: `feature_extraction/module2_signals.py`
   - `Brake_Aggression` = std de la señal de freno
   - `MeanAbs_Jerk_Long`, `MeanAbs_Jerk_Lat` = suavidad de pedales/volante
   - `Max_Lateral_g`, `Max_Longitudinal_g` (aceleraciones normalizadas por g)
-  - `Energy_Index` = valor final de `TireEnergyProxy` en la vuelta
-  - Metadatos de contexto: `LapTimeSeconds`, `Compound`, `TyreLife`
+- `Energy_Index` = valor final de `TireEnergyProxy` en la vuelta
+- Metadatos de contexto: `LapTimeSeconds`, `Compound`, `TyreLife`
+
+### Interpretación y próximos pasos (Módulo 2)
+- Qué mirar: curvas de `Speed` vs `RelativeTime_s`/`Distance_m`, jerk longitudinal/lateral (picos = inputs bruscos), y la curva acumulada de `TireEnergyProxy` (más pendiente = más carga sobre el neumático). En `lap_features_module2.csv` compara `MeanAbs_Jerk` vs `LapTimeSeconds` para ver si la suavidad correlaciona con ritmo.
+- Gráficos sugeridos (añadidos en `notebooks/tests.ipynb`):
+  - Velocidad vs tiempo (vuelta más rápida) y vs distancia (top 2) para “ghost laps”.
+  - Throttle/Brake vs tiempo para la vuelta más rápida.
+  - Jerk_long/Jerk_lat vs tiempo para la vuelta más rápida (picos → transiciones agresivas).
+- Curva de `TireEnergyProxy` a lo largo de la vuelta para los dos más rápidos.
+- Dispersión `MeanAbs_Jerk_Long` vs `LapTimeSeconds` (suavidad vs performance).
+- Justificación: estas visuales permiten validar que el suavizado no introduce fase, que las derivadas son estables y que el proxy de energía refleja zonas de alta demanda (curvas rápidas, frenadas fuertes). Si detectas ruido residual, ajusta la ventana/orden SG en `module2_signals.py`.
+- Siguiente módulo: usar `lap_features_module2.csv` y/o `telemetry_time_10hz_enriched.csv` para Ingeniería de Características/PCA (Módulo 3) y preparar dataset de modelado (Módulo 4).
+
+### EDA recomendado (ya en `notebooks/tests.ipynb`)
+- Estadísticos básicos (`describe`) de `LapTimeSeconds`, `MeanAbs_Jerk_*`, `Energy_Index`, `Avg_Speed_mps`, `Brake_Aggression`, `Max_*_g`.
+- Correlaciones con `LapTimeSeconds` para ver qué métricas físicas se asocian más al ritmo.
+- Scatter matrix reducido (`LapTimeSeconds`, `Avg_Speed_mps`, `Energy_Index`, `MeanAbs_Jerk_*`) para observar relaciones no lineales.
+- Boxplots por `Compound` (LapTime, Energy_Index, Jerk_long) para evidenciar diferencias por neumático.
+- Dispersión `TyreLife` vs `LapTimeSeconds` y vs `Energy_Index` para evaluar efecto de desgaste.
+- Visuales añadidas para intuición espacial/temporal: heatmap de correlaciones anotadas; velocidad vs distancia coloreada por throttle; mapa XY coloreado por velocidad; scatter Throttle vs Brake coloreado por tiempo; histogramas de jerk por compuesto; energía de neumático acumulada en el tiempo para top 2.
+- Estas celdas están agregadas en la sección de EDA estadístico del notebook.
+
+### Interpretación de lo explorado en el notebook
+- **Ritmo vs suavidad**: la dispersión `MeanAbs_Jerk_Long` vs `LapTimeSeconds` suele mostrar que menor jerk longitudinal (inputs más suaves de acelerador/freno) tiende a correlacionar con mejores tiempos, aunque no siempre es lineal; la scatter matrix ayuda a detectar outliers o relaciones no lineales.
+- **Energía de neumático**: la curva de `TireEnergyProxy` a lo largo de la vuelta señala zonas de alta demanda (pendiente pronunciada en frenadas/curvas rápidas). El `Energy_Index` final, comparado entre pilotos/top 2, sugiere quién “gasta” más neumático para lograr su tiempo.
+- **Throttle/Brake vs tiempo y vs distancia**: al colorear velocidad por throttle en función de la distancia se identifican zonas de lift-and-coast o aplicación parcial de acelerador; el scatter Throttle vs Brake coloreado por tiempo muestra secuencias de inputs y si hay solapes (malas prácticas) o transiciones limpias.
+- **Mapa XY coloreado por velocidad**: permite ubicar visualmente en el circuito dónde se alcanzan velocidades máximas y cómo se distribuyen los picos de frenada/aceleración; útil para contrastar con el proxy de energía.
+- **Compuesto y desgaste**: boxplots por `Compound` para LapTime/Energy/Jerk y scatter `TyreLife` vs LapTime/Energy permiten evaluar si compuesto y edad del neumático impactan la suavidad y el ritmo (p.ej., neumáticos más frescos con menor jerk y menor Energy_Index).
+- **Correlación global**: el heatmap anotado resume qué features tienen mayor relación con el LapTime; típicamente `Avg_Speed_mps` y `MeanAbs_Jerk_Long` emergen como relevantes. Esto orienta la selección de variables para PCA y modelado.
 
 ### Uso rápido
 ```bash
