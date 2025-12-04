@@ -179,11 +179,102 @@ Por defecto consume `data/module1_ingestion/2024_Bahrain_Grand_Prix_R/lap_featur
   - Dispersión PC1 vs PC2 coloreada por piloto (clusters de estilo).
   - Dispersión PC1 vs PC2 coloreada por compuesto (impacto de neumático).
   - Tabla de loadings ordenada para PC1/PC2 (qué físicas dominan cada eje).
+  - Visuales avanzadas: ejes cruzados y elipse de confianza 95% en PC1/PC2; biplot con vectores de variables superpuestos a los individuos; scatter 3D PC1-PC2-PC3 coloreado por piloto; biplot 3D (vectores de variables en PC1/PC2/PC3).
+
+### Consideraciones sobre variancia y mejoras posibles
+- Con los artefactos actuales: PC1 ≈ 39%, PC2 ≈ 22%, PC3 ≈ 12% (≈73% acumulado). PC1–PC2 (~61%) es aceptable para visualización 2D; para capturar más estructura usa PC3 o las features originales. Para más separación en 2D, puedes: (a) añadir features específicas (p.ej., medias/picos de throttle/brake, % tiempo en throttle/brake, número de eventos de jerk alto, min/max speed, sectorización por distancia), (b) quitar colinealidad si hay signals redundantes, o (c) usar proyecciones no lineales (UMAP/t-SNE) solo para visual.
+- Los vectores de variables (biplot) muestran la inclinación de cada feature respecto a PC1/PC2 (y en 3D, respecto a PC3): flechas orientadas hacia cuadrantes con mayor contribución de jerk/agresividad o de velocidad/energía/compound. Esto ayuda a inferir si un eje es más “estilo” o más “coche/neumático”.
+- Lectura de gráficos: en 2D, PC1 separa principalmente ritmo (Avg_Speed_mps a la derecha, LapTime a la izquierda); jerk y energía apuntan en el mismo cuadrante (más demanda/agresividad). Compounds: SOFT se alinea con velocidad, HARD con TyreLife/LapTime. En 3D, PC3 aporta separación residual; vueltas que se solapan en el plano PC1-PC2 pueden distanciarse en PC3 (útil para clustering/modelo).
+
+## Módulo 4 – Modelado predictivo (LapTime)
+
+Archivo: `feature_extraction/module4_modeling.py`
+
+### Qué hace
+- Carga `lap_features_module2.csv` y, si existen, añade `PC1-3` (`pca_scores_module3.csv`) como features opcionales.
+- Preprocesa: escalado para numéricas y one-hot para categóricas.
+- Entrena y compara varios modelos:
+  - RandomForestRegressor (baseline no lineal, robusto).
+  - GradientBoostingRegressor (boosting escalar).
+  - Lasso (baseline lineal regularizado).
+  - XGBoostRegressor y LightGBMRegressor (si están instalados) con hiperparámetros moderados.
+- Split train/validación 80/20 (random_state=42) y calcula métricas: MAE, RMSE, R². Guarda:
+  - `model_metrics_module4.json`
+  - `best_model_module4.pkl` (pipeline completo)
+  - `val_predictions_module4.csv` (y_true/y_pred en validación) para análisis visual.
+
+### Uso rápido
+```bash
+python feature_extraction/module4_modeling.py
+```
+o con `uv`:
+```bash
+uv run python feature_extraction/module4_modeling.py
+```
+Usa por defecto los artefactos en `data/module1_ingestion/2024_Bahrain_Grand_Prix_R/`.
+
+### Visualizaciones de resultados (en `notebooks/tests.ipynb`)
+- Barras comparando MAE y RMSE por modelo.
+- Dispersión y_true vs y_pred del mejor modelo (línea y=x para ver sesgo).
+- Histograma de residuos (ideal centrado en 0, simétrico).
+- Estas gráficas permiten evaluar precisión, sesgo y dispersión de predicciones.
+
+### Justificación y siguientes pasos
+- Modelos no lineales (RF, GB, XGB) capturan interacciones entre dinámica física (jerk, g’s, energía) y contexto (compound, TyreLife). Lasso da una referencia lineal e interpretable.
+- Si la varianza del PCA no es suficiente para separar estilos, se pueden usar features originales + PC1-3 (pipeline lo soporta). XGBoost puede manejar ambas sin necesidad de PCA.
+- Refinamientos: tuning de hiperparámetros, añadir más features de estilo (eventos de jerk alto, % tiempo en throttle/brake), o validación cruzada estratificada por piloto/compound para robustez.
+
+## Batch y consolidación de datos (para escalar el dataset)
+
+- `feature_extraction/batch_ingest.py`: recorre múltiples años/rounds/sesiones y ejecuta `ingest_session` (Módulo 1) en batch. Configura los años, ronda y sesiones (`YEARS`, `ROUND_RANGE`, `SESSION_TYPES`) y ejecuta:
+  ```bash
+  uv run python feature_extraction/batch_ingest.py
+  ```
+- `feature_extraction/merge_lap_features.py`: concatena todos los `lap_features_module2.csv` bajo `data/module1_ingestion/*` y añade columnas `Year`, `Event`, `SessionType`, generando `data/module1_ingestion/all_lap_features.csv`:
+  ```bash
+  uv run python feature_extraction/merge_lap_features.py
+  ```
+
+## Nuevas features (para robustecer el modelado)
+
+A partir de `telemetry_time_10hz_enriched.csv` se derivan:
+- `Throttle_mean`, `Throttle_p90`, `Throttle_time_pct`: estadísticos y % de tiempo con throttle > 10%.
+- `Brake_mean`, `Brake_p90`, `Brake_time_pct`: estadísticos y % de tiempo con brake > 5%.
+- `Speed_min`, `Speed_max`: velocidad mínima y máxima de la vuelta.
+- `JerkLong_events`, `JerkLat_events`: conteo de muestras donde |jerk| > 5 m/s³ (eventos de brusquedad).
+
+Estas se fusionan con `lap_features_module2.csv` antes del modelado y pueden ayudar a separar estilos/estrategias y rendimiento del coche.
+
+## K-Fold en el modelado
+
+- El Módulo 4 ahora usa K-Fold (5-fold, shuffle, random_state=42) para calcular métricas promedio (MAE_mean, RMSE_mean, R2_mean), reduciendo la variabilidad de un solo split en datasets pequeños. Para mayor robustez, puedes aumentar `n_splits` o usar CV estratificado por piloto/compound.
+## Glosario (términos y variables)
+- Throttle: porcentaje de apertura del acelerador (0% sin gas, 100% pedal a fondo).
+- Brake: porcentaje de presión de freno (0% sin freno, 100% máxima presión).
+- Speed: velocidad del coche (km/h); `Avg_Speed_mps` es la velocidad media en m/s.
+- LapTimeSeconds: tiempo de vuelta en segundos.
+- LapNumber: número de vuelta en la sesión.
+- Compound: tipo de neumático (SOFT, MEDIUM, HARD); influye en grip y desgaste.
+- TyreLife: edad del neumático en número de vueltas desde que se montó.
+- nGear: marcha engranada (entero).
+- RPM: revoluciones del motor por minuto.
+- DRS: estado del ala trasera móvil (0 cerrado, 1 abierto).
+- Distance / Distance_m: distancia recorrida en la vuelta (m); `Distance_pct` es el porcentaje de vuelta.
+- RelativeTime_s: tiempo relativo desde el inicio de la vuelta (segundos) tras remuestreo a 10 Hz.
+- Savitzky–Golay: filtro que ajusta polinomios locales en ventanas fijas para suavizar sin retraso y derivar con ruido reducido.
+- Aceleración longitudinal (AX_long): componente tangencial de la aceleración (cambios de velocidad en la dirección de avance).
+- Aceleración lateral (AY_lat): componente normal de la aceleración (cambios de dirección; carga en curvas).
+- Jerk_long / Jerk_lat: derivada de la aceleración (tasa de cambio de AX/AY). Mide brusquedad de inputs (pedal/volante); menor jerk = conducción más suave.
+- Brake_Aggression: desviación estándar de la señal de freno; variabilidad alta indica uso más agresivo/errático del pedal.
+- Max_Longitudinal_g / Max_Lateral_g: picos de aceleración normalizados por la gravedad (9.81 m/s²); reflejan frenadas/aceleraciones fuertes y carga en curvas.
+- Energy_Index (TireEnergyProxy): integral aproximada de |a|·v a lo largo de la vuelta (masa unitaria), proxy de energía/carga disipada en el neumático; mayor valor implica mayor demanda térmica/mecánica.
+- PCA (PC1/PC2/PC3): componentes principales que combinan linealmente las features para maximizar varianza explicada (tras estandarizar).
 
 ### Resultados y visualización (artefactos ejecutados)
 - Los scores y el modelo quedan en `pca_scores_module3.csv` y `pca_model_module3.json`. El notebook carga estos artefactos, grafica la varianza explicada (barras + acumulada) y muestra loadings ordenados (magnitud de contribución por feature).
 - Las dispersión PC1 vs PC2 se colorea por piloto y por compuesto para ver si hay clusters de estilo (jerk/agresividad) vs efectos de neumático. PC1 vs LapTimeSeconds permite comprobar si PC1 captura principalmente ritmo.
 - Los loadings muestran qué variables dominan PC1/PC2; una magnitud alta en jerk o brake aggression sugiere eje de “suavidad/estilo”, mientras que alta en Avg_Speed/Energy/Compound indica eje más ligado a rendimiento del coche/neumático.
+- En los artefactos actuales la varianza explicada es aproximada: PC1 ≈ 39%, PC2 ≈ 22%, PC3 ≈ 12% (≈ 73% acumulado con 3 PCs). Con solo dos componentes ~61% de varianza: es aceptable para visualización 2D (PC1 vs PC2) pero para capturar más estructura en modelado conviene usar PC3 (o mantener features originales). Si requieres >70% en 2D, puedes: (a) ampliar features relevantes (p.ej. medias/picos de throttle/brake, sectores), (b) probar PCA tras eliminar colinealidad fuerte, o (c) explorar métodos no lineales (UMAP/t-SNE) para visual sólo.
 
 ### Uso rápido
 ```bash
