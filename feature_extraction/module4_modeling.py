@@ -16,6 +16,12 @@ from sklearn.model_selection import KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+# SHAP opcional; si no está instalado, lo omitimos.
+try:
+    import shap
+except Exception:
+    shap = None
+
 # Imports opcionales (solo si están instalados)
 try:
     from xgboost import XGBRegressor
@@ -27,11 +33,15 @@ try:
 except Exception:  # pragma: no cover - opcional
     LGBMRegressor = None
 
+# Use the script directory so paths work whether the script is run from the
+# project root or from inside the `feature_extraction/` folder.
+_script_dir = Path(__file__).resolve().parent
 # Base de datos: usa outputs de Módulo 2 y 3
-BASE_DIR: Path = Path("data") / "module1_ingestion" / "2024_Bahrain_Grand_Prix_R"
-LAP_FEATURES_FILE = BASE_DIR / "lap_features_module2.csv"
-PCA_SCORES_FILE = BASE_DIR / "pca_scores_module3.csv"
-TELEMETRY_ENRICHED_FILE = BASE_DIR / "telemetry_time_10hz_enriched.csv"
+BASE_DIR: Path = _script_dir / "data" / "module1_ingestion"
+# Dataset global consolidado
+GLOBAL_LAP_FEATURES = BASE_DIR / "all_lap_features.csv"
+# PCs globales normalizados (opcional)
+GLOBAL_PCS_NORM = BASE_DIR / "pca_scores_global_norm.csv"
 
 TARGET = "LapTimeSeconds"
 THROTTLE_ON_THRESH = 10.0  # %
@@ -47,25 +57,23 @@ class ModelResult:
     r2: float
     y_true: np.ndarray
     y_pred: np.ndarray
+    meta: pd.DataFrame | None = None
 
 
 def load_dataset(
-    lap_features_path: Path = LAP_FEATURES_FILE,
-    pca_scores_path: Path = PCA_SCORES_FILE,
-    telemetry_enriched_path: Path = TELEMETRY_ENRICHED_FILE,
+    lap_features_path: Path = GLOBAL_LAP_FEATURES,
+    pca_scores_path: Path = GLOBAL_PCS_NORM,
     use_pcs: bool = True,
 ) -> Tuple[pd.DataFrame, pd.Series]:
-    """Carga features de M2 y opcionalmente añade PC1-3 como variables."""
+    """Carga el dataset global consolidado y añade PC1-3 normalizados si existen."""
     lap_feat = pd.read_csv(lap_features_path)
-    # Enriquecer con features adicionales derivados de la telemetría enriquecida
-    if telemetry_enriched_path.exists():
-        extra = compute_extra_features(telemetry_enriched_path)
-        lap_feat = lap_feat.merge(extra, on=["Driver", "LapNumber"], how="left")
 
     if use_pcs and pca_scores_path.exists():
         pcs = pd.read_csv(pca_scores_path)[["PC1", "PC2", "PC3"]]
         lap_feat = pd.concat([lap_feat.reset_index(drop=True), pcs.reset_index(drop=True)], axis=1)
 
+    # Eliminar filas con NaN en cualquier columna de entrada/target
+    lap_feat = lap_feat.dropna().reset_index(drop=True)
     y = lap_feat[TARGET]
     X = lap_feat.drop(columns=[TARGET])
     return X, y
@@ -136,6 +144,7 @@ def evaluate_model_cv(
     r2s: List[float] = []
     preds_all: List[float] = []
     y_all: List[float] = []
+    meta_parts: List[pd.DataFrame] = []
 
     pipe = Pipeline(steps=[("preprocess", preprocessor), ("model", model)])
 
@@ -149,6 +158,7 @@ def evaluate_model_cv(
         r2s.append(r2_score(y_val, y_pred))
         preds_all.extend(y_pred.tolist())
         y_all.extend(y_val.tolist())
+        meta_parts.append(X_val.reset_index(drop=True))
 
     # Entrenar una vez en todo el dataset para persistir el pipeline final
     pipe.fit(X, y)
@@ -160,12 +170,13 @@ def evaluate_model_cv(
         r2=float(np.mean(r2s)),
         y_true=np.array(y_all),
         y_pred=np.array(preds_all),
+        meta=pd.concat(meta_parts, ignore_index=True) if meta_parts else None,
     )
     return res, pipe
 
 
 def run_modeling(use_pcs: bool = True) -> Dict[str, float]:
-    """Orquesta la carga, entrenamiento y evaluación (K-Fold) de múltiples modelos."""
+    """Orquesta la carga global, entrenamiento y evaluación (K-Fold) de múltiples modelos."""
     X, y = load_dataset(use_pcs=use_pcs)
     preprocessor, _, _ = build_preprocessor(X)
 
@@ -202,7 +213,56 @@ def run_modeling(use_pcs: bool = True) -> Dict[str, float]:
     preds_df = pd.DataFrame(
         {"y_true": best.y_true, "y_pred": best.y_pred, "fold_order": list(range(len(best.y_true)))}
     ).reset_index(drop=True)
+    if best.meta is not None:
+        preds_df = pd.concat([best.meta.reset_index(drop=True), preds_df], axis=1)
     preds_df.to_csv(out_dir / "val_predictions_module4.csv", index=False)
+
+    # SHAP: calcular valores y guardar resumen si la librería está disponible
+    if shap is not None and hasattr(best_pipe, "predict"):
+        try:
+            # Tomamos una muestra para rapidez (sobre las features originales)
+            X_sample_raw = X.sample(min(500, len(X)), random_state=42)
+            # Transformamos con el preprocesador del pipeline (puede devolver sparse)
+            preproc = best_pipe.named_steps["preprocess"]
+            X_sample_tr = preproc.transform(X_sample_raw)
+            # Asegurar denso para construir DataFrame
+            if not hasattr(X_sample_tr, "toarray"):
+                X_sample_dense = X_sample_tr
+            else:
+                X_sample_dense = X_sample_tr.toarray()
+            feature_names = preproc.get_feature_names_out()
+
+            model_step = best_pipe.named_steps["model"]
+            # Explainer acorde al modelo; TreeExplainer cubre RF/GB/XGB/LGBM, para Lasso cae a Explainer genérico
+            tree_models = {
+                "RandomForestRegressor",
+                "GradientBoostingRegressor",
+                "XGBRegressor",
+                "LGBMRegressor",
+            }
+            if hasattr(shap, "TreeExplainer") and model_step.__class__.__name__ in tree_models:
+                explainer = shap.TreeExplainer(model_step)
+                shap_values = explainer(X_sample_dense)
+            else:
+                explainer = shap.Explainer(model_step, X_sample_dense, feature_names=feature_names)
+                shap_values = explainer(X_sample_dense)
+
+            # Convertir a DataFrame usando nombres del espacio transformado
+            shap_summary = pd.DataFrame(shap_values.values, columns=feature_names)
+
+            shap_dir = out_dir / "shap"
+            shap_dir.mkdir(exist_ok=True, parents=True)
+            # Guardar valores SHAP en formato resumen (parquet)
+            shap_summary.to_parquet(shap_dir / "shap_values.parquet", index=False)
+            # Guardar la muestra de entrada original para contextualizar
+            X_sample_raw.to_csv(shap_dir / "shap_input_sample_raw.csv", index=False)
+            # Guardar nombres de features (post-encoder) para trazabilidad
+            pd.Series(feature_names).to_csv(shap_dir / "shap_feature_names.csv", index=False, header=False)
+            # Importancias medias absolutas
+            mean_abs = shap_summary.abs().mean().sort_values(ascending=False)
+            mean_abs.to_csv(shap_dir / "shap_mean_abs.csv")
+        except Exception as exc:
+            print(f"SHAP no se pudo calcular: {exc}")
 
     return {
         "best_model": best.name,

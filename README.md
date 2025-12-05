@@ -191,17 +191,25 @@ Por defecto consume `data/module1_ingestion/2024_Bahrain_Grand_Prix_R/lap_featur
 Archivo: `feature_extraction/module4_modeling.py`
 
 ### Qué hace
-- Carga `lap_features_module2.csv` y, si existen, añade `PC1-3` (`pca_scores_module3.csv`) como features opcionales.
+- Carga el dataset consolidado `feature_extraction/data/module1_ingestion/all_lap_features.csv` y, si existen, añade `PC1-3` globales normalizados (`pca_scores_global_norm.csv`) como features opcionales.
 - Preprocesa: escalado para numéricas y one-hot para categóricas.
 - Entrena y compara varios modelos:
-  - RandomForestRegressor (baseline no lineal, robusto).
-  - GradientBoostingRegressor (boosting escalar).
-  - Lasso (baseline lineal regularizado).
-  - XGBoostRegressor y LightGBMRegressor (si están instalados) con hiperparámetros moderados.
-- Split train/validación 80/20 (random_state=42) y calcula métricas: MAE, RMSE, R². Guarda:
+- RandomForestRegressor (baseline no lineal, robusto).
+- GradientBoostingRegressor (boosting escalar).
+- Lasso (baseline lineal regularizado).
+- XGBoostRegressor y LightGBMRegressor (si están instalados) con hiperparámetros moderados.
+- Se eliminan filas con valores NaN antes de entrenar (al usar el dataset global y PCs) para evitar fallos de sklearn; si hay sesiones con datos incompletos, esas filas se descartan del entrenamiento.
+- Validación cruzada K-Fold (5 folds, shuffle=True, random_state=42); métricas promedio: MAE_mean, RMSE_mean, R2_mean. Guarda:
   - `model_metrics_module4.json`
   - `best_model_module4.pkl` (pipeline completo)
   - `val_predictions_module4.csv` (y_true/y_pred en validación) para análisis visual.
+- Interpretabilidad (opcional, si `shap` está instalado):
+  - Se calcula un subconjunto de valores SHAP (muestra de 500 filas máx) y se guardan en `data/module1_ingestion/shap/`:
+    - `shap_values.parquet`: matriz SHAP (muestra × features, en el espacio transformado/one-hot).
+    - `shap_input_sample_raw.csv`: muestra de entrada cruda (sin preprocesar) para contexto.
+    - `shap_feature_names.csv`: nombres de columnas ya transformadas (coinciden con `shap_values`).
+    - `shap_mean_abs.csv`: importancia media absoluta por feature (post-encoding).
+  - Esto permite explicar cómo cada variable física y de neumáticos empuja el tiempo de vuelta.
 
 ### Uso rápido
 ```bash
@@ -217,7 +225,11 @@ Usa por defecto los artefactos en `data/module1_ingestion/2024_Bahrain_Grand_Pri
 - Barras comparando MAE y RMSE por modelo.
 - Dispersión y_true vs y_pred del mejor modelo (línea y=x para ver sesgo).
 - Histograma de residuos (ideal centrado en 0, simétrico).
-- Estas gráficas permiten evaluar precisión, sesgo y dispersión de predicciones.
+- Violin/box de residuos por `Year` o `Compound` para ver estabilidad entre temporadas y compuestos.
+- SHAP (si existe `data/module1_ingestion/shap/`):
+  - Barra de importancias medias absolutas (top 15) desde `shap_mean_abs.csv`.
+  - Beeswarm usando `shap_values.parquet` + `shap_feature_names.csv` (puedes cargar `shap_input_sample_raw.csv` para contexto de las features originales).
+- Estas gráficas permiten evaluar precisión, sesgo, dispersión y qué drivers físicos dominan las predicciones.
 
 ### Justificación y siguientes pasos
 - Modelos no lineales (RF, GB, XGB) capturan interacciones entre dinámica física (jerk, g’s, energía) y contexto (compound, TyreLife). Lasso da una referencia lineal e interpretable.
@@ -250,6 +262,33 @@ Usa por defecto los artefactos en `data/module1_ingestion/2024_Bahrain_Grand_Pri
   - Heatmap de correlación de variables numéricas.
   - Violines de `Energy_Index` y `MeanAbs_Jerk_Long` por año.
 - Estas visuales permiten verificar consistencia entre temporadas, impacto de neumático y relación ritmo/energía/jerk antes de reentrenar PCA y modelos con el dataset completo.
+
+### PCA global multiaño
+- Script: `feature_extraction/module3_pca_global.py` toma `feature_extraction/data/module1_ingestion/all_lap_features.csv`, arma la matriz con features físicas + dummies de Compound y Year, estandariza y calcula PCA (PC1–PC3). Persiste:
+  - `pca_scores_global.csv` (PC1/PC2/PC3 + Driver, LapNumber, Compound, Year, Event, SessionType)
+  - `pca_model_global.json` (varianza explicada, loadings, media/escala del scaler, nombres de features)
+- Uso:
+  ```bash
+  uv run python feature_extraction/module3_pca_global.py
+  ```
+- Nota: el PCA global descarta filas con NaN en cualquiera de las features de entrada antes de escalar (para evitar fallos de scikit-learn). Asegura que `all_lap_features.csv` esté completo; en caso de datos incompletos de alguna sesión/piloto, esas filas se eliminan de la matriz PCA pero permanecen en el archivo original.
+
+### PCA global normalizado por evento (nuevo)
+- Script: `feature_extraction/module3_pca_global_normalized.py` normaliza por evento para quitar el efecto pista:
+  - Z-score por (Year, Event) de LapTime, Speed, Jerk, g y Brake_Aggression.
+  - Energy_Index se transforma a `Energy_per_m` (divide por distancia estimada de vuelta) y se z-score por evento.
+  - TyreLife también se z-score por evento.
+  - Se añaden dummies de Compound (Year ya absorbido en la normalización).
+- Genera:
+  - `pca_scores_global_norm.csv` (PCs + Driver, LapNumber, Compound, Year, Event, SessionType)
+  - `pca_model_global_norm.json` (varianza, loadings, scaler)
+- Uso:
+  ```bash
+  uv run python feature_extraction/module3_pca_global_normalized.py
+  ```
+- Visuales en el notebook (sección PCA global normalizado): varianza explicada, PC1/PC2 por año/compound, biplot 2D, PC1 vs LapTime y PC1 vs Energy_per_m. Este PCA suele concentrar más varianza en PC1/PC2 al eliminar el efecto pista y dejar más señal de estilo/estrategia.
+- Último run (normalizado): PC1 ≈ 23.2%, PC2 ≈ 13.9%, PC3 ≈ 12.6% (≈ 49.7% acumulado). Aunque PC1 baja ligeramente respecto al PCA bruto, PC2/PC3 suben, señal de que la normalización repartió de forma más uniforme la varianza al eliminar el efecto pista; más útil para comparar estilos/estrategias entre eventos.
+- Visuales en el notebook (sección PCA global): varianza explicada (barras+acumulada), scatter PC1/PC2 coloreado por año o compound, biplot 2D (vectores de variables), scatter 3D PC1/PC2/PC3 por año, y PC1 vs LapTime/Energy para comprobar que PC1 captura ritmo/demanda.
 
 ## Nuevas features (para robustecer el modelado)
 
