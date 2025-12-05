@@ -1,7 +1,7 @@
 {
   "RandomForest": {
     "MAE_mean": 0.8821757933681846,
-    "RMSE_mean": 1.8757969427595742,
+    "RMSE_mean": 1.875796942759574,
     "R2_mean": 0.9704364694357384
   },
   "GradientBoosting": {
@@ -27,7 +27,7 @@
   "best_model": {
     "name": "RandomForest",
     "MAE_mean": 0.8821757933681846,
-    "RMSE_mean": 1.8757969427595742,
+    "RMSE_mean": 1.875796942759574,
     "R2_mean": 0.9704364694357384
   }
 }

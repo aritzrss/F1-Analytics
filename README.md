@@ -274,14 +274,21 @@ Usa por defecto los artefactos en `data/module1_ingestion/2024_Bahrain_Grand_Pri
 - Nota: el PCA global descarta filas con NaN en cualquiera de las features de entrada antes de escalar (para evitar fallos de scikit-learn). Asegura que `all_lap_features.csv` esté completo; en caso de datos incompletos de alguna sesión/piloto, esas filas se eliminan de la matriz PCA pero permanecen en el archivo original.
 
 ### PCA global normalizado por evento (nuevo)
-- Script: `feature_extraction/module3_pca_global_normalized.py` normaliza por evento para quitar el efecto pista:
-  - Z-score por (Year, Event) de LapTime, Speed, Jerk, g y Brake_Aggression.
-  - Energy_Index se transforma a `Energy_per_m` (divide por distancia estimada de vuelta) y se z-score por evento.
-  - TyreLife también se z-score por evento.
-  - Se añaden dummies de Compound (Year ya absorbido en la normalización).
-- Genera:
-  - `pca_scores_global_norm.csv` (PCs + Driver, LapNumber, Compound, Year, Event, SessionType)
-  - `pca_model_global_norm.json` (varianza, loadings, scaler)
+- Script: `feature_extraction/module3_pca_global_normalized.py` normaliza por evento para quitar el efecto pista.
+- Objetivo y fundamento estadístico:
+  - Es un “within-group standardization” por (Year, Event): removemos el efecto fijo de cada circuito (longitud, grip, layout) centrando y escalando dentro del evento antes del PCA global. Así evitamos que la varianza entre pistas domine PC1 y dejamos que los PCs reflejen estilo/estrategia.
+  - Z-score por evento es estadísticamente correcto cuando queremos comparar variaciones intra-evento (estilo, degradación) eliminando niveles base distintos. Si la desviación estándar del grupo es 0 (muy pocos puntos), se usa 1 para evitar división por cero; esto no cambia el valor (queda centrado en 0).
+- Cómo se normaliza cada feature (por grupo Year, Event):
+  - `LapTimeSeconds`, `Avg_Speed_mps`, `MeanAbs_Jerk_Long`, `MeanAbs_Jerk_Lat`, `Max_Lateral_g`, `Max_Longitudinal_g`, `Brake_Aggression`, `TyreLife`: \\((x - \\mu_{evento}) / \\sigma_{evento}\\). Esto quita la “pendiente” base de pista y conserva dispersión intra-evento (estilo de conducción, degradación, setup).
+  - `Energy_Index` → primero `Energy_per_m = Energy_Index / (Avg_Speed_mps * LapTimeSeconds)`, aproximando energía por metro (distancia estimada de la vuelta). Luego z-score por evento. Físicamente compara la demanda energética por unidad de distancia, haciendo comparables Monza y Mónaco.
+  - `Compound`: one-hot; evita imponer un orden artificial y mantiene interpretabilidad de vectores en biplot.
+- Matriz PCA:
+  - Inputs al PCA: `{LapTimeSeconds_norm, Energy_per_m_norm, MeanAbs_Jerk_Long_norm, MeanAbs_Jerk_Lat_norm, Avg_Speed_mps_norm, Brake_Aggression_norm, Max_Lateral_g_norm, Max_Longitudinal_g_norm, TyreLife_norm}` + dummies de `Compound`.
+  - Estandarización global posterior (StandardScaler) y PCA con 3 componentes.
+  - Metadatos en scores: `Driver, LapNumber, Compound, Year, Event, SessionType, LapTimeSeconds (crudo), Energy_per_m (crudo)` + `PC1-3`.
+- Salidas:
+  - `pca_scores_global_norm.csv`
+  - `pca_model_global_norm.json` (varianza explicada, loadings, scaler)
 - Uso:
   ```bash
   uv run python feature_extraction/module3_pca_global_normalized.py
