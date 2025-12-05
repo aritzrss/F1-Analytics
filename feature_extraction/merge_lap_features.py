@@ -51,6 +51,9 @@ def main() -> None:
         lap_file = folder / "lap_features_module2.csv"
         if lap_file.exists():
             df = pd.read_csv(lap_file)
+            # Saltar sesiones vacías o sin columnas
+            if df.empty or df.shape[1] == 0:
+                continue
             df["Year"] = year
             df["Event"] = event_name
             df["SessionType"] = session_type
