@@ -234,6 +234,22 @@ Usa por defecto los artefactos en `data/module1_ingestion/2024_Bahrain_Grand_Pri
   ```bash
   uv run python feature_extraction/merge_lap_features.py
   ```
+- Sesiones sin datos o incompletas: si un GP no tiene vueltas válidas (ej. Spa 2021 con 2 vueltas tras SC) o la API entrega telemetría/posición incompleta para un piloto, `ingest_session` ignora ese piloto y `merge_lap_features.py` omite sesiones vacías. Es normal ver warnings de “Position/Car data is incomplete”; los módulos posteriores sólo usan vueltas que se pudieron alinear.
+- `feature_extraction/batch_module2.py`: ejecuta el Módulo 2 para todas las sesiones del Módulo 1 que aún no tengan `lap_features_module2.csv` (requiere que exista `telemetry_time_10hz.csv` en cada carpeta):
+  ```bash
+  uv run python feature_extraction/batch_module2.py
+  ```
+- Dataset consolidado actual: `feature_extraction/data/module1_ingestion/all_lap_features.csv` con 1,719 filas (vueltas rápidas por piloto) de 2021–2024, solo sesiones de carrera (`SessionType=R`). Conteo por año: 2021 (403), 2022 (426), 2023 (427), 2024 (463), con 21, 22, 22 y 24 eventos respectivamente. Esto es la base para reejecutar PCA y modelado multiaño.
+
+### EDA multiaño (notebook `notebooks/tests.ipynb`)
+- Se añadieron celdas para explorar `all_lap_features.csv`:
+  - Boxplots y KDE de `LapTimeSeconds` por año.
+  - Scatter `LapTime` vs `Energy_Index` y vs `Avg_Speed_mps` coloreado por año.
+  - Boxplots por `Compound` (LapTime, Energy, Jerk_long).
+  - Scatter `TyreLife` vs LapTime y vs Energy.
+  - Heatmap de correlación de variables numéricas.
+  - Violines de `Energy_Index` y `MeanAbs_Jerk_Long` por año.
+- Estas visuales permiten verificar consistencia entre temporadas, impacto de neumático y relación ritmo/energía/jerk antes de reentrenar PCA y modelos con el dataset completo.
 
 ## Nuevas features (para robustecer el modelado)
 
