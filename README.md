@@ -222,19 +222,24 @@ uv run python feature_extraction/module4_modeling.py
 Usa por defecto los artefactos en `data/module1_ingestion/2024_Bahrain_Grand_Prix_R/`.
 
 ### Visualizaciones de resultados (en `notebooks/tests.ipynb`)
-- Barras comparando MAE y RMSE por modelo.
-- Dispersión y_true vs y_pred del mejor modelo (línea y=x para ver sesgo).
-- Histograma de residuos (ideal centrado en 0, simétrico).
-- Violin/box de residuos por `Year` o `Compound` para ver estabilidad entre temporadas y compuestos.
+- Barras comparando MAE, RMSE y R2 por modelo (promedio CV 5-fold) para ver exactitud y estabilidad.
+- Dispersión y_true vs y_pred del mejor modelo (línea y=x); nube pegada a la diagonal = modelo sin sesgo. Separación respecto a la línea muestra sub/sobre-estimación.
+- Histograma de residuos: ideal centrado en 0 y simétrico (errores pequeños y sin sesgo). Colas largas indican outliers (p. ej. vueltas con banderas o pit).
+- Violin/box de residuos por `Year` y por `Compound`: medianas cerca de 0 y varianzas similares implican que el modelo es robusto entre temporadas y compuestos; sesgos por neumático/año aparecerían como medianas desplazadas.
 - SHAP (si existe `data/module1_ingestion/shap/`):
-  - Barra de importancias medias absolutas (top 15) desde `shap_mean_abs.csv`.
-  - Beeswarm usando `shap_values.parquet` + `shap_feature_names.csv` (puedes cargar `shap_input_sample_raw.csv` para contexto de las features originales).
-- Estas gráficas permiten evaluar precisión, sesgo, dispersión y qué drivers físicos dominan las predicciones.
+  - Barra de importancias medias absolutas (top 15) desde `shap_mean_abs.csv` (ranking global de contribución).
+  - Beeswarm usando `shap_values.parquet` + `shap_feature_names.csv`: puntos rojos (valor alto) a la derecha implican mayor tiempo de vuelta; a la izquierda, reducción. Permite ver dirección del efecto por muestra.
+- Permutation importance (en notebook): mide cuánto empeora la métrica al permutar cada feature. Energy_Index y Event suelen ser críticas; valores pequeños indican que el modelo puede prescindir de esa señal sin degradarse mucho.
+- Interpretación general de los gráficos:
+  - y_true vs y_pred ≈ correlación 1 → R2 alto (≈0.97); el modelo explica casi toda la variabilidad del LapTime.
+  - Residuos centrados y consistentes por Year/Compound → no hay sesgo sistemático temporal ni por neumático.
+  - SHAP y permutation coinciden en la física: mayor Energy_Index (demanda energética) aumenta LapTime; mayor Avg_Speed_mps lo reduce; LapNumber alto aumenta LapTime (degradación/carga). Las dummies de Event capturan diferencias de pista que el PCA normalizado no elimina del todo.
 
 ### Justificación y siguientes pasos
+- Criterio de mejor modelo: se elige el menor MAE_mean en CV (segundos de error medio interpretables). Se contrasta con RMSE_mean (penaliza outliers) y R2_mean (proporción de varianza explicada). El RandomForest fue el mejor porque obtuvo el menor MAE_mean y alto R2_mean, con residuos sin sesgo por año/compound.
 - Modelos no lineales (RF, GB, XGB) capturan interacciones entre dinámica física (jerk, g’s, energía) y contexto (compound, TyreLife). Lasso da una referencia lineal e interpretable.
 - Si la varianza del PCA no es suficiente para separar estilos, se pueden usar features originales + PC1-3 (pipeline lo soporta). XGBoost puede manejar ambas sin necesidad de PCA.
-- Refinamientos: tuning de hiperparámetros, añadir más features de estilo (eventos de jerk alto, % tiempo en throttle/brake), o validación cruzada estratificada por piloto/compound para robustez.
+- Refinamientos: tuning de hiperparámetros, añadir más features de estilo (eventos de jerk alto, % tiempo en throttle/brake), validación cruzada estratificada por piloto/compound, o calibrar el modelo si se detecta sesgo en residuos por segmento.
 
 ## Batch y consolidación de datos (para escalar el dataset)
 
@@ -306,6 +311,89 @@ A partir de `telemetry_time_10hz_enriched.csv` se derivan:
 - `JerkLong_events`, `JerkLat_events`: conteo de muestras donde |jerk| > 5 m/s³ (eventos de brusquedad).
 
 Estas se fusionan con `lap_features_module2.csv` antes del modelado y pueden ayudar a separar estilos/estrategias y rendimiento del coche.
+
+## **Features — Física, Matemáticas y Cálculo (Detallado)**
+
+Esta sección documenta con rigor las features calculadas en el pipeline (principalmente las que aparecen en
+`telemetry_time_10hz_enriched.csv` y `lap_features_module2.csv`). Incluye fórmulas, unidades, decisiones numéricas
+y el razonamiento físico detrás de cada indicador.
+
+- **Preprocesado y derivadas**: antes de calcular derivadas se aplica un suavizado Savitzky–Golay sobre las series
+  de posición y velocidad para reducir ruido sin introducir retardo de fase. Sea $x(t), y(t)$ la posición en metros
+  suavizada y $\Delta t = 1/\mathrm{sample\_rate}$ (para 10 Hz, $\Delta t=0.1\,$s):
+  - Velocidades en plano: $v_x = \mathrm{d}x/\mathrm{d}t$, $v_y = \mathrm{d}y/\mathrm{d}t$ (numéricamente `np.gradient`).
+  - Aceleraciones por eje: $a_x = \mathrm{d}v_x/\mathrm{d}t$, $a_y = \mathrm{d}v_y/\mathrm{d}t`.
+  - El uso de SG reduce la amplificación de ruido que produce la diferenciación numérica; la derivada sigue
+    realizándose con `np.gradient` sobre la serie suavizada.
+
+- **Velocidad y componentes** (`telemetry_time_10hz_enriched.csv`)
+  - `Speed_mps`: velocidad en m/s. Calculada a partir de `Speed` (km/h) con $v[\mathrm{m/s}] = v[\mathrm{km/h}]\cdot 1000/3600$,
+    luego suavizada por SG.
+  - `VX`, `VY`: componentes de velocidad en m/s derivados de las posiciones suavizadas: $v_x, v_y$.
+
+- **Aceleraciones descompuestas (tangencial / lateral)**
+  - Aceleración tangencial (longitudinal) $a_t$ (en m/s²): proyección del vector aceleración sobre la dirección de la velocidad
+    $$a_t = \frac{a_x v_x + a_y v_y}{\|v\|},\qquad \|v\|=\sqrt{v_x^2+v_y^2}.$$ 
+    Representa cambios en el módulo de la velocidad (acelerar/frenar).
+  - Aceleración lateral (normal) $a_n$ (en m/s²): componente perpendicular que explica la curva
+    $$a_n = \frac{a_x v_y - a_y v_x}{\|v\|}.$$
+    Su signo indica la orientación del giro; su magnitud refleja carga lateral.
+  - En el código estos campos se guardan como `AX_long` y `AY_lat`.
+
+- **Jerk (tasa de cambio de aceleración)**
+  - $j_t = \mathrm{d}a_t/\mathrm{d}t$, $j_n = \mathrm{d}a_n/\mathrm{d}t$ (en m/s³). Se calculan con `np.gradient` sobre las series
+    de aceleración suavizadas y se almacenan como `Jerk_long`, `Jerk_lat`.
+  - Interpretación: picos de jerk indican transiciones bruscas en pedal/volante; su valor medio absoluto es un indicador de
+    suavidad de conducción (`MeanAbs_Jerk_Long`, `MeanAbs_Jerk_Lat`).
+
+- **Proxy de potencia / energía del neumático (TireEnergyProxy)**
+  - Implementación actual (en `module2_signals.py`): para cada muestra se calcula
+    $$P'(t) = (|a_t(t)| + |a_n(t)|)\cdot \|v(t)\|,$$
+    y la integral acumulada (suma discreta) sobre la vuelta
+    $$E' = \int P'(t)\,\mathrm{d}t \approx \sum_t P'(t)\,\Delta t.$$ 
+    En el CSV aparece la curva acumulada `TireEnergyProxy` por muestra y el valor final (último elemento) es el
+    `Energy_Index` almacenado en `lap_features_module2.csv`.
+  - Unidades: $P'$ tiene unidades m²/s³ = W/kg (potencia por unidad de masa); la integral $E'$ tiene unidades m²/s² = J/kg
+    (energía por unidad de masa). Si se desea la energía física aproximada, multiplicar por la masa del vehículo $m$ (kg).
+  - Nota importante: la implementación opta por la suma de magnitudes de componentes $|a_t|+|a_n|$ en lugar de la magnitud
+    vectorial total $\|a\|=\sqrt{a_x^2+a_y^2}$. Ambas son válidas como *proxy* pero tienen diferencias:
+    - $P'_{sum}=(|a_t|+|a_n|)\,\|v\|$ (actual): más interpretable por separar demanda longitudinal/lateral; puede sobrecontar
+      cuando ambas componentes son simultáneamente grandes porque suma en lugar de combinar por norma Euclidiana.
+    - $P'_{mag}=\|a\|\,\|v\|$ con $\|a\|=\sqrt{a_x^2+a_y^2}$ (alternativa físicamente directa): representa la magnitud
+      de la aceleración total; no dobla contribuciones ortogonales. Recomendación: conservar ambos si se desea análisis más
+      riguroso y comparar rangos/ordenamientos.
+
+- **Cómputo numérico**
+  - Derivadas: `np.gradient(series, dt)` con `dt=1/sample_rate_hz` (ej. 0.1 s) sobre series suavizadas.
+  - Suavizado SG: ventana `DEFAULT_SAVGOL_WINDOW` (impar) y polinomio `DEFAULT_SAVGOL_POLY` (orden 2 por defecto). Ajustar ventana
+    cambia la sensibilidad a picos y el nivel de ruido.
+  - Integración: suma discreta `energy = np.cumsum(power_proxy * dt)` o `np.trapz(power_proxy, dx=dt)` para mayor precisión.
+
+- **Features agregadas por vuelta (`lap_features_module2.csv`)**
+  - `Energy_Index`: valor final de `TireEnergyProxy` en la vuelta (J/kg aprox.).
+  - `Avg_Speed_mps`: media de `Speed_mps` sobre la vuelta (m/s).
+  - `MeanAbs_Jerk_Long`, `MeanAbs_Jerk_Lat`: media de valores absolutos de `Jerk_long` y `Jerk_lat`.
+  - `Brake_Aggression`: desviación estándar de la señal `Brake` en la vuelta (indicador de variabilidad/agresividad de frenado).
+  - `Max_Lateral_g`, `Max_Longitudinal_g`: picos de aceleración normalizados por $g=9.81\,\mathrm{m/s^2}$:
+    $$\mathrm{Max\_Lateral\_g} = \max(|a_n|)/g,\quad \mathrm{Max\_Longitudinal\_g}=\max(|a_t|)/g.$$ 
+  - `Energy_per_m`: normalización por longitud aproximada de la vuelta para comparar pistas distintas:
+    $$\mathrm{Lap\_Distance\_est} = \mathrm{Avg\_Speed\_mps}\cdot\mathrm{LapTimeSeconds},\qquad
+    \mathrm{Energy\_per\_m} = \frac{Energy\_Index}{\mathrm{Lap\_Distance\_est}}.$$ 
+    Esta normalización reduce la dependencia del tamaño del circuito (Monza vs Mónaco).
+
+- **Decisiones de diseño y recomendaciones**
+  - Por reproducibilidad y claridad se guarda tanto la curva acumulada `TireEnergyProxy` (por muestra) como el agregado `Energy_Index`.
+  - Recomendamos comparar ambos proxies ($P'_{sum}$ vs $P'_{mag}$) en un análisis de sensibilidad; mantener ambos columnas facilita
+    interpretación y robustez en modelos posteriores.
+  - Validar la estabilidad del `Energy_Index` ante cambios en parámetros SG: correr pruebas con ventanas más/menos agresivas y
+    comprobar correlación de rankings entre pilotos (si el ranking se mantiene, el proxy es robusto para comparativas).
+  - En escenarios donde exista información de masa del vehículo y pérdidas por fricción, se puede convertir a Joules físicos
+    multiplicando por la masa estimada; aun así seguirá siendo una aproximación.
+
+Esta sección complementa el glosario y proporciona la base teórica y numérica para justificar cada columna que utiliza el
+equipo de modelado (Módulos 3 y 4). Si quieres, puedo:
+- añadir ejemplos numéricos (snippet Python) que calculen y comparen ambas variantes del proxy de energía sobre Bahrein 2024; o
+- añadir columnas extra al pipeline (`TireEnergyProxy_mag`, `PowerProxy_sum`) y actualizar `module2_signals.py` para almacenar ambas.
 
 ## K-Fold en el modelado
 
