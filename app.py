@@ -61,6 +61,20 @@ def load_shap_mean_abs() -> Optional[pd.DataFrame]:
     return None
 
 
+@st.cache_data(show_spinner=False)
+def list_events_with_telemetry() -> list[Path]:
+    events = []
+    for p in DATA_DIR.glob("*_Grand_Prix_*"):
+        if (p / "telemetry_time_10hz_enriched.csv").exists():
+            events.append(p)
+    return sorted(events)
+
+
+@st.cache_data(show_spinner=False)
+def load_telemetry(event_dir: Path) -> pd.DataFrame:
+    return pd.read_csv(event_dir / "telemetry_time_10hz_enriched.csv")
+
+
 def style_app() -> None:
     st.set_page_config(page_title="F1 Analytics", layout="wide")
     st.markdown(
@@ -226,6 +240,82 @@ def plot_shap(shap_df: pd.DataFrame) -> None:
     st.plotly_chart(fig, use_container_width=True)
 
 
+def section_ghost_laps() -> None:
+    st.subheader("Ghost laps: comparación de telemetría")
+    events = list_events_with_telemetry()
+    if not events:
+        st.info("No se encontraron archivos telemetry_time_10hz_enriched.csv")
+        return
+    event_map = {p.name: p for p in events}
+    event_sel = st.selectbox("Evento", list(event_map.keys()))
+    df = load_telemetry(event_map[event_sel])
+    drivers = sorted(df["Driver"].unique())
+    col1, col2 = st.columns(2)
+    with col1:
+        d1 = st.selectbox("Piloto A", drivers, key="d1")
+        laps1 = sorted(df[df["Driver"] == d1]["LapNumber"].unique())
+        l1 = st.selectbox("Vuelta A", laps1, key="l1")
+    with col2:
+        d2 = st.selectbox("Piloto B", drivers, key="d2")
+        laps2 = sorted(df[df["Driver"] == d2]["LapNumber"].unique())
+        l2 = st.selectbox("Vuelta B", laps2, key="l2")
+
+    x_col = "Distance" if "Distance" in df.columns else "RelativeTime_s"
+    y_col = "Speed_mps" if "Speed_mps" in df.columns else "Speed"
+
+    ghost = pd.concat(
+        [
+            df[(df["Driver"] == d1) & (df["LapNumber"] == l1)].assign(label=f"{d1}-Lap{l1}"),
+            df[(df["Driver"] == d2) & (df["LapNumber"] == l2)].assign(label=f"{d2}-Lap{l2}"),
+        ]
+    )
+    fig = px.line(
+        ghost,
+        x=x_col,
+        y=y_col,
+        color="label",
+        hover_data=["Throttle", "Brake", "nGear", "RPM"],
+        title=f"Ghost: {event_sel} — Velocidad vs {x_col}",
+        color_discrete_sequence=px.colors.qualitative.Prism,
+    )
+    fig.update_layout(height=420, yaxis_title="Velocidad", xaxis_title=x_col)
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def section_heatmap() -> None:
+    st.subheader("Heatmaps: energía / jerk vs distancia")
+    events = list_events_with_telemetry()
+    if not events:
+        st.info("No se encontraron archivos telemetry_time_10hz_enriched.csv")
+        return
+    event_map = {p.name: p for p in events}
+    event_sel = st.selectbox("Evento (heatmap)", list(event_map.keys()), key="hm_event")
+    df = load_telemetry(event_map[event_sel])
+    drivers = sorted(df["Driver"].unique())
+    d_sel = st.selectbox("Piloto", drivers, key="hm_driver")
+    laps = sorted(df[df["Driver"] == d_sel]["LapNumber"].unique())
+    l_sel = st.selectbox("Vuelta", laps, key="hm_lap")
+
+    subset = df[(df["Driver"] == d_sel) & (df["LapNumber"] == l_sel)]
+    x_col = "Distance" if "Distance" in subset.columns else "RelativeTime_s"
+    heat_vars = [c for c in ["Speed", "Speed_mps", "Throttle", "Brake", "TireEnergyProxy", "Jerk_long", "Jerk_lat"] if c in subset.columns]
+    if not heat_vars:
+        st.info("No hay columnas numéricas típicas para heatmap en este archivo.")
+        return
+    var_sel = st.selectbox("Variable a mapear", heat_vars, key="hm_var")
+    fig = px.density_heatmap(
+        subset,
+        x=x_col,
+        y=var_sel,
+        nbinsx=80,
+        nbinsy=40,
+        color_continuous_scale="Turbo",
+        title=f"Heatmap {var_sel} vs {x_col} — {event_sel}, Driver {d_sel}, Lap {l_sel}",
+    )
+    fig.update_layout(height=420)
+    st.plotly_chart(fig, use_container_width=True)
+
+
 def main() -> None:
     style_app()
     st.title("🏎️ F1 Analytics – Telemetría, PCA y Modelado")
@@ -262,6 +352,10 @@ def main() -> None:
         plot_shap(shap_mean_abs)
     else:
         st.info("No se encontraron artefactos SHAP; instala shap y vuelve a correr module4_modeling.py.")
+
+    st.subheader("Telemetría avanzada")
+    section_ghost_laps()
+    section_heatmap()
 
     st.markdown("---")
     st.markdown(
