@@ -241,6 +241,12 @@ Usa por defecto los artefactos en `data/module1_ingestion/2024_Bahrain_Grand_Pri
 - Si la varianza del PCA no es suficiente para separar estilos, se pueden usar features originales + PC1-3 (pipeline lo soporta). XGBoost puede manejar ambas sin necesidad de PCA.
 - Refinamientos: tuning de hiperparámetros, añadir más features de estilo (eventos de jerk alto, % tiempo en throttle/brake), validación cruzada estratificada por piloto/compound, o calibrar el modelo si se detecta sesgo en residuos por segmento.
 
+### Trabajo futuro (ideas priorizadas)
+- Proxy energético vectorial: calcular una variante “mag” con `a_mag = sqrt(ax^2 + ay^2)` y `PowerProxy_mag = a_mag * |v|`, integrando a `Energy_Index_mag` y `Energy_per_m_mag`. Objetivo: capturar la demanda total sin cancelar ejes y comparar si mejora el R² o la degradación modelada. Requiere ajustar Módulo 2 (nuevas columnas en telemetría y lap_features), reejecutar batch_module2, PCA y modelado, y validar con SHAP/Permutation.
+- CV estratificado por piloto/compound/evento para reducir fuga de información por distribución de vueltas.
+- Mayor riqueza visual en la app (Streamlit/Plotly): ghost laps, mapas de calor de energía/jerk por distancia, sliders para filtrar por piloto/neumático/evento, explainers SHAP interactivos.
+- Evaluar normalización alternativa por “stint” para aislar efectos de edad de neumático y carga de combustible estimada.
+
 ## Batch y consolidación de datos (para escalar el dataset)
 
 - `feature_extraction/batch_ingest.py`: recorre múltiples años/rounds/sesiones y ejecuta `ingest_session` (Módulo 1) en batch. Configura los años, ronda y sesiones (`YEARS`, `ROUND_RANGE`, `SESSION_TYPES`) y ejecuta:
