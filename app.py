@@ -1,368 +1,386 @@
-"""
-Streamlit app para explorar el pipeline F1 Analytics.
-
-Se apoya en los artefactos generados en feature_extraction/data/module1_ingestion:
-- all_lap_features.csv (dataset consolidado multiaño)
-- pca_scores_global_norm.csv (PCA global normalizado)
-- val_predictions_module4.csv + model_metrics_module4.json (modelado)
-- shap_mean_abs.csv (opcional, interpretabilidad)
-"""
-
-from __future__ import annotations
-
-import json
-from pathlib import Path
-from typing import Optional
-
+import streamlit as st
 import pandas as pd
 import plotly.express as px
-import streamlit as st
+import plotly.graph_objects as go
+import numpy as np
+import os
+from pathlib import Path
 
-# Rutas base
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "feature_extraction" / "data" / "module1_ingestion"
+# ==========================================
+# CONFIGURACIÓN Y CONSTANTES
+# ==========================================
+st.set_page_config(
+    page_title="F1 Analytics - Industry 4.0",
+    page_icon="🏎️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
+# Ruta base donde los scripts guardan los datos (ajustar según tu repo)
+BASE_DATA_DIR = Path("feature_extraction/data/module1_ingestion")
 
-@st.cache_data(show_spinner=False)
-def load_laps() -> pd.DataFrame:
-    path = DATA_DIR / "all_lap_features.csv"
-    return pd.read_csv(path)
+# Colores F1 (Aproximados por equipo 2024 para visualización)
+TEAM_COLORS = {
+    'VER': '#3671C6', 'PER': '#3671C6',  # Red Bull
+    'LEC': '#E8002D', 'SAI': '#E8002D',  # Ferrari
+    'HAM': '#27F4D2', 'RUS': '#27F4D2',  # Mercedes
+    'NOR': '#FF8000', 'PIA': '#FF8000',  # McLaren
+    'ALO': '#229971', 'STR': '#229971',  # Aston Martin
+}
 
+# ==========================================
+# FUNCIONES DE CARGA DE DATOS (CACHÉ)
+# ==========================================
 
-@st.cache_data(show_spinner=False)
-def load_pca_scores() -> Optional[pd.DataFrame]:
-    path = DATA_DIR / "pca_scores_global_norm.csv"
-    if path.exists():
-        return pd.read_csv(path)
-    return None
+@st.cache_data
+def get_available_events():
+    """Escanea el directorio de datos para encontrar eventos procesados."""
+    if not BASE_DATA_DIR.exists():
+        return []
+    # Filtrar solo directorios que parecen eventos (tienen año al principio)
+    dirs = [d.name for d in BASE_DATA_DIR.iterdir() if d.is_dir() and d.name[0].isdigit()]
+    return sorted(dirs, reverse=True)
 
+@st.cache_data
+def load_session_data(event_folder):
+    """Carga los CSVs clave de una sesión específica con manejo de errores y cálculo físico."""
+    path = BASE_DATA_DIR / event_folder
+    
+    data = {}
+    
+    # 1. Telemetría Enriquecida (Módulo 2)
+    if (path / "telemetry_time_10hz_enriched.csv").exists():
+        data['telemetry_time'] = pd.read_csv(path / "telemetry_time_10hz_enriched.csv")
+    elif (path / "telemetry_time_10hz.csv").exists():
+        data['telemetry_time'] = pd.read_csv(path / "telemetry_time_10hz.csv")
+        
+    # 2. Telemetría Alineada por Distancia (Módulo 1)
+    if (path / "telemetry_distance_aligned.csv").exists():
+        df_dist = pd.read_csv(path / "telemetry_distance_aligned.csv")
+        
+        # --- FIX CRÍTICO: Reconstruir el tiempo usando Física ---
+        # El archivo solo tiene Distancia y Velocidad. T = Distancia / Velocidad.
+        # Integramos paso a paso para obtener RelativeTime_s.
+        if 'RelativeTime_s' not in df_dist.columns:
+            if 'Speed' in df_dist.columns and 'Distance_m' in df_dist.columns:
+                try:
+                    # Función interna para calcular tiempo acumulado por piloto
+                    def calculate_time_from_speed(group):
+                        # Ordenar por distancia asegurada
+                        group = group.sort_values('Distance_m')
+                        
+                        # Velocidad en m/s (Speed viene en km/h)
+                        v_ms = group['Speed'] / 3.6
+                        
+                        # Evitar división por cero (coche parado)
+                        v_ms = v_ms.replace(0, 0.1)
+                        
+                        # Diferencia de distancia (debería ser 1m, pero calculamos por si acaso)
+                        d_dist = group['Distance_m'].diff().fillna(0)
+                        
+                        # Tiempo por paso: dt = dx / v
+                        dt = d_dist / v_ms
+                        
+                        # Tiempo acumulado
+                        group['RelativeTime_s'] = dt.cumsum()
+                        return group
 
-@st.cache_data(show_spinner=False)
-def load_model_metrics() -> Optional[dict]:
-    path = DATA_DIR / "model_metrics_module4.json"
-    if path.exists():
-        return json.loads(path.read_text())
-    return None
+                    # Aplicar a cada piloto por separado
+                    df_dist = df_dist.groupby('Driver', group_keys=False).apply(calculate_time_from_speed)
+                    
+                except Exception as e:
+                    st.warning(f"No se pudo reconstruir el tiempo desde la velocidad: {e}")
 
+        data['telemetry_dist'] = df_dist
+        
+    # 3. Lap Features (Módulo 2)
+    if (path / "lap_features_module2.csv").exists():
+        data['laps'] = pd.read_csv(path / "lap_features_module2.csv")
+        
+    return data
 
-@st.cache_data(show_spinner=False)
-def load_val_preds() -> Optional[pd.DataFrame]:
-    path = DATA_DIR / "val_predictions_module4.csv"
-    if path.exists():
-        return pd.read_csv(path)
-    return None
+@st.cache_data
+def load_global_data():
+    """Carga datos globales (PCA, Modelado) del root de ingestion."""
+    data = {}
+    
+    # PCA Global
+    pca_path = BASE_DATA_DIR / "pca_scores_global_norm.csv"
+    if pca_path.exists():
+        data['pca'] = pd.read_csv(pca_path)
+    else:
+        pca_path_raw = BASE_DATA_DIR / "pca_scores_global.csv"
+        if pca_path_raw.exists():
+            data['pca'] = pd.read_csv(pca_path_raw)
+            
+    # SHAP / Modelado
+    shap_path = BASE_DATA_DIR / "shap" / "shap_mean_abs.csv"
+    if shap_path.exists():
+        data['shap_importance'] = pd.read_csv(shap_path)
+        
+    # Predicciones validación
+    preds_path = BASE_DATA_DIR / "val_predictions_module4.csv"
+    if preds_path.exists():
+        data['predictions'] = pd.read_csv(preds_path)
 
+    return data
 
-@st.cache_data(show_spinner=False)
-def load_shap_mean_abs() -> Optional[pd.DataFrame]:
-    path = DATA_DIR / "shap" / "shap_mean_abs.csv"
-    if path.exists():
-        return pd.read_csv(path, header=None, names=["feature", "mean_abs"])
-    return None
+# ==========================================
+# INTERFAZ DE USUARIO
+# ==========================================
 
+st.title("🏎️ F1-Analytics: Dashboard de Ingeniería")
+st.markdown("""
+Esta aplicación visualiza el pipeline de procesamiento de **Industria 4.0** definido en el repositorio.
+Desde la ingesta y alineación de señales hasta el modelado predictivo de tiempos de vuelta.
+""")
 
-@st.cache_data(show_spinner=False)
-def list_events_with_telemetry() -> list[Path]:
-    events = []
-    for p in DATA_DIR.glob("*_Grand_Prix_*"):
-        if (p / "telemetry_time_10hz_enriched.csv").exists():
-            events.append(p)
-    return sorted(events)
+# --- SIDEBAR: SELECCIÓN DE DATOS ---
+st.sidebar.header("📁 Configuración de Sesión")
 
+available_events = get_available_events()
 
-@st.cache_data(show_spinner=False)
-def load_telemetry(event_dir: Path) -> pd.DataFrame:
-    return pd.read_csv(event_dir / "telemetry_time_10hz_enriched.csv")
+if not available_events:
+    st.error(f"No se encontraron datos en `{BASE_DATA_DIR}`. Por favor ejecuta `module1_ingestion.py` primero.")
+    st.stop()
 
+selected_event = st.sidebar.selectbox("Seleccionar Evento (Cache)", available_events)
+session_data = load_session_data(selected_event)
+global_data = load_global_data()
 
-def style_app() -> None:
-    st.set_page_config(page_title="F1 Analytics", layout="wide")
-    st.markdown(
-        """
-        <style>
-        body {background: #0b1021;}
-        .block-container {padding: 2rem 2.5rem;}
-        h1,h2,h3,h4 {color: #e4e7ef;}
-        p, li, span, label {color: #cfd3e2;}
-        .metric {background: linear-gradient(135deg,#192140,#0f162d); padding: 1rem; border-radius: 10px; border:1px solid #1f2a48;}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+if 'laps' not in session_data:
+    st.warning("Faltan archivos de 'features' (Módulo 2). Ejecuta `module2_signals.py`.")
+else:
+    drivers_list = session_data['laps']['Driver'].unique()
+    
+    st.sidebar.subheader("🆚 Comparativa")
+    driver_1 = st.sidebar.selectbox("Piloto Referencia", drivers_list, index=0)
+    idx_2 = 1 if len(drivers_list) > 1 else 0
+    driver_2 = st.sidebar.selectbox("Piloto Comparación", drivers_list, index=idx_2)
 
+# --- PESTAÑAS PRINCIPALES ---
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📊 Telemetría & Ghost Car", 
+    "🧪 Física & Neumáticos (M2)", 
+    "🧬 Estilo de Conducción (PCA)", 
+    "🤖 Modelado AI (M4)"
+])
 
-def sidebar_filters(df: pd.DataFrame) -> pd.DataFrame:
-    st.sidebar.header("Filtros")
-    years = sorted(df["Year"].unique())
-    events = sorted(df["Event"].unique())
-    compounds = sorted(df["Compound"].unique())
-    drivers = sorted(df["Driver"].unique())
+# ==========================================
+# TAB 1: TELEMETRÍA Y GHOST CAR
+# ==========================================
+with tab1:
+    st.header("Análisis de Vuelta Rápida (Alineación Espacial)")
+    
+    if 'telemetry_dist' in session_data:
+        df_dist = session_data['telemetry_dist']
+        
+        d1_data = df_dist[df_dist['Driver'] == driver_1].copy()
+        d2_data = df_dist[df_dist['Driver'] == driver_2].copy()
+        
+        # Verificar si tenemos tiempo (reconstruido o real)
+        can_calculate_delta = 'RelativeTime_s' in d1_data.columns and 'RelativeTime_s' in d2_data.columns
+        
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            if can_calculate_delta:
+                try:
+                    merged_ghost = pd.merge(
+                        d1_data[['Distance_m', 'RelativeTime_s', 'Speed']], 
+                        d2_data[['Distance_m', 'RelativeTime_s', 'Speed']], 
+                        on='Distance_m', 
+                        suffixes=(f'_{driver_1}', f'_{driver_2}')
+                    )
+                    
+                    merged_ghost['Delta_s'] = merged_ghost[f'RelativeTime_s_{driver_2}'] - merged_ghost[f'RelativeTime_s_{driver_1}']
+                    
+                    fig_delta = px.line(merged_ghost, x='Distance_m', y='Delta_s', 
+                                        title=f"⏱️ Ghost Car Delta (Tiempo reconstruido): {driver_2} vs {driver_1} (Ref)",
+                                        labels={'Delta_s': f'Dif. Tiempo (s) - Negativo: {driver_2} más rápido'})
+                    fig_delta.add_hline(y=0, line_dash="dash", line_color="gray")
+                    fig_delta.update_traces(line_color='white')
+                    st.plotly_chart(fig_delta, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"No se pudo calcular el Delta: {e}")
+            else:
+                st.info("⚠️ No se pudo reconstruir el tiempo. Mostrando solo velocidad.")
+            
+            if 'Speed' in d1_data.columns and 'Distance_m' in d1_data.columns:
+                fig_speed = go.Figure()
+                fig_speed.add_trace(go.Scatter(x=d1_data['Distance_m'], y=d1_data['Speed'], 
+                                            mode='lines', name=driver_1, line=dict(color=TEAM_COLORS.get(driver_1, 'red'))))
+                fig_speed.add_trace(go.Scatter(x=d2_data['Distance_m'], y=d2_data['Speed'], 
+                                            mode='lines', name=driver_2, line=dict(color=TEAM_COLORS.get(driver_2, 'white'))))
+                fig_speed.update_layout(title="Velocidad vs Distancia", xaxis_title="Distancia (m)", yaxis_title="Speed (km/h)")
+                st.plotly_chart(fig_speed, use_container_width=True)
+            else:
+                st.error("Faltan columnas Speed/Distance.")
 
-    year_sel = st.sidebar.multiselect("Años", years, default=years)
-    event_sel = st.sidebar.multiselect("Eventos", events, default=events[:5])
-    comp_sel = st.sidebar.multiselect("Compound", compounds, default=compounds)
-    driver_sel = st.sidebar.multiselect("Pilotos (ID FIA)", drivers, default=drivers)
+        with col2:
+            st.markdown("### Datos Vuelta")
+            if 'laps' in session_data:
+                laps_df = session_data['laps']
+                try:
+                    l1 = laps_df[laps_df['Driver'] == driver_1]
+                    l2 = laps_df[laps_df['Driver'] == driver_2]
+                    
+                    if not l1.empty and not l2.empty:
+                        lap1 = l1.iloc[0]
+                        lap2 = l2.iloc[0]
+                        
+                        st.metric(label=f"Tiempo {driver_1}", value=f"{lap1['LapTimeSeconds']:.3f} s")
+                        st.metric(label=f"Tiempo {driver_2}", value=f"{lap2['LapTimeSeconds']:.3f} s", 
+                                delta=f"{lap1['LapTimeSeconds'] - lap2['LapTimeSeconds']:.3f}")
+                        
+                        st.markdown("---")
+                        st.markdown(f"**Neumático {driver_1}:** {lap1['Compound']} ({lap1['TyreLife']} vueltas)")
+                        st.markdown(f"**Neumático {driver_2}:** {lap2['Compound']} ({lap2['TyreLife']} vueltas)")
+                    else:
+                        st.warning("Datos no disponibles para estos pilotos.")
+                except IndexError:
+                    st.warning("Error leyendo metadatos.")
+            else:
+                st.warning("Faltan metadatos de vueltas.")
+    else:
+        st.warning("No se encontró `telemetry_distance_aligned.csv`.")
 
-    filt = df[
-        df["Year"].isin(year_sel)
-        & df["Event"].isin(event_sel)
-        & df["Compound"].isin(comp_sel)
-        & df["Driver"].isin(driver_sel)
-    ]
-    return filt
+# ==========================================
+# TAB 2: FÍSICA Y NEUMÁTICOS
+# ==========================================
+with tab2:
+    st.header("Dinámica Vehicular y Energía (Módulo 2)")
+    
+    if 'telemetry_time' in session_data:
+        df_time = session_data['telemetry_time']
+        has_physics = 'AX_long' in df_time.columns and 'TireEnergyProxy' in df_time.columns
+        
+        if has_physics:
+            col_phy_1, col_phy_2 = st.columns(2)
+            d1_phys = df_time[df_time['Driver'] == driver_1]
+            d2_phys = df_time[df_time['Driver'] == driver_2]
+            
+            with col_phy_1:
+                st.subheader("🔋 Energía de Neumático Acumulada")
+                st.markdown("Integral de `(|Lat_G| + |Long_G|) * Speed`. Proxy de degradación.")
+                fig_energy = go.Figure()
+                fig_energy.add_trace(go.Scatter(x=d1_phys['RelativeTime_s'], y=d1_phys['TireEnergyProxy'], 
+                                                name=driver_1, line=dict(color=TEAM_COLORS.get(driver_1, 'red'))))
+                fig_energy.add_trace(go.Scatter(x=d2_phys['RelativeTime_s'], y=d2_phys['TireEnergyProxy'], 
+                                                name=driver_2, line=dict(color=TEAM_COLORS.get(driver_2, 'white'))))
+                fig_energy.update_layout(xaxis_title="Tiempo (s)", yaxis_title="Energy Index (J/kg aprox)")
+                st.plotly_chart(fig_energy, use_container_width=True)
 
+            with col_phy_2:
+                st.subheader("🎯 Círculo de Fricción (G-G Diagram)")
+                fig_gg = go.Figure()
+                fig_gg.add_trace(go.Scatter(x=d1_phys['AY_lat']/9.81, y=d1_phys['AX_long']/9.81, 
+                                            mode='markers', name=driver_1, 
+                                            marker=dict(size=4, color=TEAM_COLORS.get(driver_1, 'red'), opacity=0.5)))
+                fig_gg.add_trace(go.Scatter(x=d2_phys['AY_lat']/9.81, y=d2_phys['AX_long']/9.81, 
+                                            mode='markers', name=driver_2, 
+                                            marker=dict(size=4, color=TEAM_COLORS.get(driver_2, 'white'), opacity=0.5)))
+                fig_gg.update_layout(xaxis_title="Lateral G", yaxis_title="Longitudinal G",
+                                     width=500, height=500, xaxis=dict(range=[-5, 5]), yaxis=dict(range=[-5, 5]))
+                st.plotly_chart(fig_gg, use_container_width=True)
 
-def kpi_cards(df: pd.DataFrame, metrics: Optional[dict]) -> None:
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown("<div class='metric'>Vueltas filtradas</div>", unsafe_allow_html=True)
-        st.metric("Vueltas", f"{len(df):,}")
-    with col2:
-        st.markdown("<div class='metric'>LapTime medio</div>", unsafe_allow_html=True)
-        st.metric("LapTime (s)", f"{df['LapTimeSeconds'].mean():.2f}")
-    with col3:
-        st.markdown("<div class='metric'>Energy_per_m medio</div>", unsafe_allow_html=True)
-        if "Energy_per_m" in df.columns:
-            st.metric("Energy/m", f"{df['Energy_per_m'].mean():.0f}")
+            st.subheader("🌊 Suavidad de Conducción (Jerk)")
+            col_j1, col_j2 = st.columns(2)
+            with col_j1:
+                fig_jerk_long = px.box(df_time[df_time['Driver'].isin([driver_1, driver_2])], 
+                                       x='Driver', y='Jerk_long', title="Distribución Jerk Longitudinal")
+                st.plotly_chart(fig_jerk_long, use_container_width=True)
+            with col_j2:
+                 st.markdown("**Puntos de Brusquedad (Jerk > 5 m/s³)**")
+                 fig_map = px.scatter(d1_phys, x='X', y='Y', color='Jerk_long', 
+                                      color_continuous_scale='RdBu_r', title=f"Mapa de Jerk: {driver_1}")
+                 fig_map.update_layout(showlegend=False, xaxis_visible=False, yaxis_visible=False)
+                 st.plotly_chart(fig_map, use_container_width=True)
         else:
-            st.metric("Energy/m", "N/A")
-    with col4:
-        best = metrics.get("best_model") if metrics else None
-        st.markdown("<div class='metric'>Mejor modelo (CV)</div>", unsafe_allow_html=True)
-        if best:
-            st.metric(best["name"], f"MAE {best['MAE_mean']:.2f}s")
+            st.info("Falta física (AX_long, TireEnergyProxy). Revisa el Módulo 2.")
+    else:
+        st.warning("Falta `telemetry_time_10hz.csv`.")
+
+# ==========================================
+# TAB 3: PCA
+# ==========================================
+with tab3:
+    st.header("Análisis de Componentes Principales (Módulo 3)")
+    
+    if 'pca' in global_data:
+        df_pca = global_data['pca']
+        st.markdown("El **PC1** suele capturar ritmo/energía, y el **PC2** estilo/agresividad.")
+        
+        all_drivers = df_pca['Driver'].unique()
+        pca_drivers = st.multiselect("Filtrar Pilotos", all_drivers, default=all_drivers[:5] if len(all_drivers) > 0 else [])
+        df_pca_filt = df_pca[df_pca['Driver'].isin(pca_drivers)]
+        
+        col_pca1, col_pca2 = st.columns([3, 1])
+        with col_pca1:
+            hover_cols = ['LapTimeSeconds', 'Event']
+            if 'TyreLife' in df_pca_filt.columns: hover_cols.append('TyreLife')
+            if 'Energy_per_m' in df_pca_filt.columns: hover_cols.append('Energy_per_m')
+
+            if not df_pca_filt.empty:
+                fig_pca = px.scatter(df_pca_filt, x='PC1', y='PC2', color='Driver', symbol='Compound',
+                                     hover_data=hover_cols, title="Espacio Latente de Conducción", width=800, height=600)
+                st.plotly_chart(fig_pca, use_container_width=True)
+            else:
+                st.info("Selecciona al menos un piloto.")
+        with col_pca2:
+            st.markdown("### Insights")
+            st.info("- **PC1:** Ritmo/Gestión.\n- **PC2:** Agresividad.")
+    else:
+        st.warning("Faltan datos de PCA.")
+
+# ==========================================
+# TAB 4: MODELADO
+# ==========================================
+with tab4:
+    st.header("Modelo Predictivo de LapTime (Módulo 4)")
+    col_mod1, col_mod2 = st.columns(2)
+    
+    with col_mod1:
+        st.subheader("Importancia de Features (SHAP)")
+        if 'shap_importance' in global_data:
+            df_shap = global_data['shap_importance']
+            # Detección automática de columnas
+            numeric_cols = df_shap.select_dtypes(include=[np.number]).columns
+            text_cols = df_shap.select_dtypes(include=['object', 'string']).columns
+            
+            if len(numeric_cols) > 0:
+                val_col = numeric_cols[0]
+                feature_col = text_cols[0] if len(text_cols) > 0 else df_shap.columns[0]
+                try:
+                    df_sorted = df_shap.sort_values(val_col, ascending=True).tail(15)
+                    fig_shap = px.bar(df_sorted, x=val_col, y=feature_col, orientation='h',
+                                    title="Top 15 Variables (SHAP)", labels={val_col: 'Impacto medio'})
+                    st.plotly_chart(fig_shap, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"Error SHAP: {e}")
+            else:
+                st.warning("Error formato SHAP.")
         else:
-            st.metric("Modelo", "N/D")
+            st.info("No hay datos SHAP.")
+            
+    with col_mod2:
+        st.subheader("Precisión del Modelo")
+        if 'predictions' in global_data:
+            df_pred = global_data['predictions']
+            fig_pred = px.scatter(df_pred, x='y_true', y='y_pred', color='SessionType',
+                                  title="LapTime Real vs Predicho", labels={'y_true': 'Real', 'y_pred': 'Predicción'})
+            min_val = min(df_pred['y_true'].min(), df_pred['y_pred'].min())
+            max_val = max(df_pred['y_true'].max(), df_pred['y_pred'].max())
+            fig_pred.add_shape(type="line", x0=min_val, y0=min_val, x1=max_val, y1=max_val, line=dict(color="White", dash="dash"))
+            st.plotly_chart(fig_pred, use_container_width=True)
+            
+            mae = np.mean(np.abs(df_pred['y_true'] - df_pred['y_pred']))
+            r2 = 1 - (np.sum((df_pred['y_true'] - df_pred['y_pred'])**2) / np.sum((df_pred['y_true'] - df_pred['y_true'].mean())**2))
+            st.metric("MAE", f"{mae:.3f} s")
+            st.metric("R2 Score", f"{r2:.4f}")
+        else:
+            st.info("No hay predicciones.")
 
-
-def plot_laptime_distribution(df: pd.DataFrame) -> None:
-    fig = px.violin(
-        df,
-        x="Year",
-        y="LapTimeSeconds",
-        color="Compound",
-        box=True,
-        points=False,
-        title="Distribución de LapTime por año y compound",
-        color_discrete_sequence=px.colors.qualitative.Set2,
-    )
-    fig.update_layout(height=420)
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def plot_energy_vs_laptime(df: pd.DataFrame) -> None:
-    fig = px.scatter(
-        df,
-        x="Energy_Index",
-        y="LapTimeSeconds",
-        color="Compound",
-        hover_data=["Event", "LapNumber", "TyreLife"],
-        trendline="ols",
-        title="LapTime vs Energy_Index (proxy de demanda)",
-        color_discrete_sequence=px.colors.qualitative.Bold,
-        opacity=0.5,
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def plot_pca(pca_df: pd.DataFrame) -> None:
-    fig = px.scatter(
-        pca_df,
-        x="PC1",
-        y="PC2",
-        color="Compound",
-        hover_data=["Driver", "Event", "Year"],
-        title="PCA global normalizado (PC1 vs PC2)",
-        color_discrete_sequence=px.colors.qualitative.Dark24,
-        opacity=0.6,
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def plot_residuals(preds: pd.DataFrame) -> None:
-    preds = preds.copy()
-    preds["resid"] = preds["y_true"] - preds["y_pred"]
-    c1, c2 = st.columns(2)
-    with c1:
-        fig = px.histogram(
-            preds,
-            x="resid",
-            nbins=50,
-            marginal="box",
-            title="Histograma de residuos",
-            color_discrete_sequence=["#6c8ef7"],
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    with c2:
-        if "Compound" in preds.columns:
-            fig2 = px.box(
-                preds,
-                x="Compound",
-                y="resid",
-                points="all",
-                title="Residuos por Compound",
-                color_discrete_sequence=["#8892bf"],
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-
-
-def plot_r2_bar(metrics: Optional[dict]) -> None:
-    if not metrics:
-        st.info("No se encontró model_metrics_module4.json")
-        return
-    metrics_no_best = {k: v for k, v in metrics.items() if k != "best_model"}
-    mdf = pd.DataFrame(metrics_no_best).T.astype(float).reset_index().rename(columns={"index": "Model"})
-    fig = px.bar(
-        mdf,
-        x="Model",
-        y="R2_mean",
-        title="R2 (promedio CV) por modelo",
-        color="R2_mean",
-        color_continuous_scale="Blues",
-        range_y=[0, 1],
-    )
-    fig.update_layout(height=360)
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def plot_shap(shap_df: pd.DataFrame) -> None:
-    shap_df = shap_df.sort_values("mean_abs", ascending=False).head(15)
-    fig = px.bar(
-        shap_df,
-        x="mean_abs",
-        y="feature",
-        orientation="h",
-        title="SHAP | Importancia media absoluta (top 15)",
-        color="mean_abs",
-        color_continuous_scale="Viridis",
-    )
-    fig.update_layout(height=520)
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def section_ghost_laps() -> None:
-    st.subheader("Ghost laps: comparación de telemetría")
-    events = list_events_with_telemetry()
-    if not events:
-        st.info("No se encontraron archivos telemetry_time_10hz_enriched.csv")
-        return
-    event_map = {p.name: p for p in events}
-    event_sel = st.selectbox("Evento", list(event_map.keys()))
-    df = load_telemetry(event_map[event_sel])
-    drivers = sorted(df["Driver"].unique())
-    col1, col2 = st.columns(2)
-    with col1:
-        d1 = st.selectbox("Piloto A", drivers, key="d1")
-        laps1 = sorted(df[df["Driver"] == d1]["LapNumber"].unique())
-        l1 = st.selectbox("Vuelta A", laps1, key="l1")
-    with col2:
-        d2 = st.selectbox("Piloto B", drivers, key="d2")
-        laps2 = sorted(df[df["Driver"] == d2]["LapNumber"].unique())
-        l2 = st.selectbox("Vuelta B", laps2, key="l2")
-
-    x_col = "Distance" if "Distance" in df.columns else "RelativeTime_s"
-    y_col = "Speed_mps" if "Speed_mps" in df.columns else "Speed"
-
-    ghost = pd.concat(
-        [
-            df[(df["Driver"] == d1) & (df["LapNumber"] == l1)].assign(label=f"{d1}-Lap{l1}"),
-            df[(df["Driver"] == d2) & (df["LapNumber"] == l2)].assign(label=f"{d2}-Lap{l2}"),
-        ]
-    )
-    fig = px.line(
-        ghost,
-        x=x_col,
-        y=y_col,
-        color="label",
-        hover_data=["Throttle", "Brake", "nGear", "RPM"],
-        title=f"Ghost: {event_sel} — Velocidad vs {x_col}",
-        color_discrete_sequence=px.colors.qualitative.Prism,
-    )
-    fig.update_layout(height=420, yaxis_title="Velocidad", xaxis_title=x_col)
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def section_heatmap() -> None:
-    st.subheader("Heatmaps: energía / jerk vs distancia")
-    events = list_events_with_telemetry()
-    if not events:
-        st.info("No se encontraron archivos telemetry_time_10hz_enriched.csv")
-        return
-    event_map = {p.name: p for p in events}
-    event_sel = st.selectbox("Evento (heatmap)", list(event_map.keys()), key="hm_event")
-    df = load_telemetry(event_map[event_sel])
-    drivers = sorted(df["Driver"].unique())
-    d_sel = st.selectbox("Piloto", drivers, key="hm_driver")
-    laps = sorted(df[df["Driver"] == d_sel]["LapNumber"].unique())
-    l_sel = st.selectbox("Vuelta", laps, key="hm_lap")
-
-    subset = df[(df["Driver"] == d_sel) & (df["LapNumber"] == l_sel)]
-    x_col = "Distance" if "Distance" in subset.columns else "RelativeTime_s"
-    heat_vars = [c for c in ["Speed", "Speed_mps", "Throttle", "Brake", "TireEnergyProxy", "Jerk_long", "Jerk_lat"] if c in subset.columns]
-    if not heat_vars:
-        st.info("No hay columnas numéricas típicas para heatmap en este archivo.")
-        return
-    var_sel = st.selectbox("Variable a mapear", heat_vars, key="hm_var")
-    fig = px.density_heatmap(
-        subset,
-        x=x_col,
-        y=var_sel,
-        nbinsx=80,
-        nbinsy=40,
-        color_continuous_scale="Turbo",
-        title=f"Heatmap {var_sel} vs {x_col} — {event_sel}, Driver {d_sel}, Lap {l_sel}",
-    )
-    fig.update_layout(height=420)
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def main() -> None:
-    style_app()
-    st.title("🏎️ F1 Analytics – Telemetría, PCA y Modelado")
-    st.caption("Explora vueltas, proxies de energía, PCA global y desempeño del modelo (MAE/RMSE/R2).")
-
-    laps = load_laps()
-    pca_df = load_pca_scores()
-    metrics = load_model_metrics()
-    preds = load_val_preds()
-    shap_mean_abs = load_shap_mean_abs()
-
-    filt_laps = sidebar_filters(laps)
-    kpi_cards(filt_laps, metrics)
-
-    st.subheader("Distribuciones y relaciones clave")
-    plot_laptime_distribution(filt_laps)
-    plot_energy_vs_laptime(filt_laps)
-
-    if pca_df is not None:
-        st.subheader("PCA global normalizado")
-        plot_pca(pca_df)
-    else:
-        st.info("No se encontró pca_scores_global_norm.csv; ejecuta module3_pca_global_normalized.py.")
-
-    if preds is not None:
-        st.subheader("Desempeño del modelo (val. cruzada)")
-        plot_residuals(preds)
-        plot_r2_bar(metrics)
-    else:
-        st.info("No se encontró val_predictions_module4.csv; ejecuta module4_modeling.py.")
-
-    if shap_mean_abs is not None:
-        st.subheader("Interpretabilidad (SHAP)")
-        plot_shap(shap_mean_abs)
-    else:
-        st.info("No se encontraron artefactos SHAP; instala shap y vuelve a correr module4_modeling.py.")
-
-    st.subheader("Telemetría avanzada")
-    section_ghost_laps()
-    section_heatmap()
-
-    st.markdown("---")
-    st.markdown(
-        "Tip: ajusta filtros en el sidebar para comparar eventos, pilotos y compuestos. "
-        "La barra R2 muestra estabilidad entre modelos; usa SHAP para ver qué variables empujan el tiempo de vuelta."
-    )
-
-
-if __name__ == "__main__":
-    main()
+# Footer
+st.markdown("---")
+st.caption("F1-Analytics Dashboard | Datos generados por FastF1 y procesados localmente.")
