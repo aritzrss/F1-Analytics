@@ -140,6 +140,7 @@ Esta sección documenta con rigor las features calculadas en el pipeline.
     $$a_n = \frac{a_x v_y - a_y v_x}{\|v\|}$$
 
 - **Jerk (Tasa de cambio de aceleración)**
+  - is the rate of change of an object's acceleration over time
   - $j_t = \mathrm{d}a_t/\mathrm{d}t$ (m/s³). Picos altos indican transiciones bruscas en pedales o volante.
   - `MeanAbs_Jerk`: Indicador agregado de suavidad de conducción.
 
@@ -152,7 +153,6 @@ Esta sección documenta con rigor las features calculadas en el pipeline.
 
 ## 🚀 Despliegue de Modelos (BentoML)
 
-Para cumplir con los requisitos de **Industria 4.0**, el proyecto incluye un servicio de inferencia en tiempo real.
 
 ### 1. Servir el Modelo (API)
 Abre una terminal nueva y ejecuta:
