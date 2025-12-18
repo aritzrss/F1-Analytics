@@ -147,3 +147,27 @@ Esta sección documenta con rigor las features calculadas en el pipeline.
   - Integral aproximada de la potencia específica demandada al neumático.
     $$E' \approx \sum (|a_t| + |a_n|) \cdot \|v\| \cdot \Delta t$$
   - Unidades: J/kg (aprox). Permite comparar la demanda física impuesta a la goma entre distintos pilotos y estrategias.
+
+---
+
+## 🚀 Despliegue de Modelos (BentoML)
+
+Para cumplir con los requisitos de **Industria 4.0**, el proyecto incluye un servicio de inferencia en tiempo real.
+
+### 1. Servir el Modelo (API)
+Abre una terminal nueva y ejecuta:
+```bash
+bentoml serve service:svc --reload
+```
+Esto iniciará un servidor en `http://localhost:3000`. Puedes probar el Swagger UI en esa URL o usar el comando `curl`.
+
+### 2. Consumir desde el Dashboard
+1. Ve a la pestaña **"🛠️ Lab de IA & Despliegue"** en la aplicación Streamlit.
+2. Introduce los valores de telemetría (Vida neumático, Velocidad, Ajustes de PCA).
+3. Pulsa "Enviar a API" para recibir la predicción del servidor BentoML.
+
+## 🛠️ Entrenamiento Interactivo
+En la misma pestaña del Lab, puedes:
+- Modificar hiperparámetros (n_estimators, max_depth).
+- Re-entrenar el modelo Random Forest en vivo.
+- Ver cómo mejora (o empeora) el MAE/R2 instantáneamente.

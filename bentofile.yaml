@@ -1,0 +1,13 @@
+service: "service:F1LaptimeService"
+labels:
+  owner: f1-analytics-team
+  project: f1-laptime-predictor
+include:
+  - "service.py"
+  - "feature_extraction/module4_modeling.py" # Si se necesita código del módulo
+python:
+  packages:
+    - scikit-learn
+    - pandas
+    - numpy
+    - pydantic

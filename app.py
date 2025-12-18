@@ -6,6 +6,9 @@ import numpy as np
 import os
 from pathlib import Path
 
+import requests
+from feature_extraction import module4_modeling
+
 # ==========================================
 # CONFIGURACIÓN Y CONSTANTES
 # ==========================================
@@ -159,11 +162,12 @@ else:
     driver_2 = st.sidebar.selectbox("Piloto Comparación", drivers_list, index=idx_2)
 
 # --- PESTAÑAS PRINCIPALES ---
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Telemetría & Ghost Car", 
     "🧪 Física & Neumáticos (M2)", 
     "🧬 Estilo de Conducción (PCA)", 
-    "🤖 Modelado AI (M4)"
+    "🤖 Modelado AI (M4)",
+    "🛠️ Lab de IA & Despliegue"
 ])
 
 # ==========================================
@@ -380,6 +384,108 @@ with tab4:
             st.metric("R2 Score", f"{r2:.4f}")
         else:
             st.info("No hay predicciones.")
+
+# ==========================================
+# TAB 5: LAB DE IA & DESPLIEGUE
+# ==========================================
+with tab5:
+    st.header("🛠️ Laboratorio de Modelos & BentoML")
+    st.markdown("Experimenta con hiperparámetros en tiempo real y prueba la API de predicción.")
+    
+    tab_train, tab_infer = st.tabs(["Entrenamiento Interactivo", "Inferencia Real-time (API)"])
+    
+    # --- SUB-TAB: TRAINING ---
+    with tab_train:
+        st.subheader("Ajuste de Hiperparámetros (Random Forest)")
+        
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            n_estimators = st.slider("Número de Árboles (n_estimators)", 10, 500, 100, step=10)
+        with c2:
+            max_depth = st.slider("Profundidad Máxima (max_depth)", 3, 50, 10, step=1)
+        with c3:
+            st.markdown("### ") 
+            train_btn = st.button("🚀 Entrenar Nuevo Modelo", type="primary")
+            
+        if train_btn:
+            with st.spinner("Entrenando modelo..."):
+                try:
+                    # Llamada al módulo 4
+                    params = {"n_estimators": n_estimators, "max_depth": max_depth}
+                    res = module4_modeling.train_single_model("RandomForest", params, use_pcs=True)
+                    
+                    st.success(f"Modelo Entrenado! MAE: {res.mae:.4f} s | R2: {res.r2:.4f}")
+                    
+                    # Mostrar gráfico simple de pred vs real
+                    fig_res = px.scatter(x=res.y_true, y=res.y_pred, 
+                                       labels={'x': 'Real', 'y': 'Predicho'}, 
+                                       title="Resultados Validación Cross-Validation (3-Fold)")
+                    fig_res.add_shape(type="line", x0=res.y_true.min(), y0=res.y_true.min(),
+                                    x1=res.y_true.max(), y1=res.y_true.max(),
+                                    line=dict(color="White", dash="dash"))
+                    st.plotly_chart(fig_res, use_container_width=True)
+                    
+                except Exception as e:
+                    st.error(f"Error en entrenamiento: {e}")
+
+    # --- SUB-TAB: INFERENCE ---
+    with tab_infer:
+        st.subheader("Invocación a API BentoML")
+        st.caption("Asegúrate de ejecutar `bentoml serve service:svc` en tu terminal.")
+        
+        # Formulario de entrada manual
+        with st.form("inference_form"):
+            col_i1, col_i2, col_i3 = st.columns(3)
+            with col_i1:
+                driver_id = st.selectbox("Piloto (ID)", ["1", "11", "16", "55", "44", "63", "14", "4"])
+                comp = st.selectbox("Neumático", ["SOFT", "MEDIUM", "HARD"])
+                tyre_life = st.number_input("Vida Neumático", 1, 50, 5)
+                
+            with col_i2:
+                avg_speed = st.number_input("Velocidad Media (m/s)", 30.0, 70.0, 55.0)
+                brake_agg = st.number_input("Agresividad Freno", 0.0, 20.0, 5.0)
+                energy = st.number_input("Energy Index", 100.0, 2000.0, 500.0)
+                
+            with col_i3:
+                pc1 = st.slider("PC1 (Ritmo)", -5.0, 5.0, 0.0)
+                pc2 = st.slider("PC2 (Estilo)", -5.0, 5.0, 0.0)
+                
+            submit_api = st.form_submit_button("📡 Enviar a API")
+            
+        if submit_api:
+            payload = {
+                "Driver": driver_id,
+                "Compound": comp,
+                "TyreLife": tyre_life,
+                "Avg_Speed_mps": avg_speed,
+                "Brake_Aggression": brake_agg,
+                "Energy_Index": energy,
+                "PC1": pc1,
+                "PC2": pc2,
+                # Valores default para el resto
+                "SessionType": "R",
+                "Avg_Throttle": 40.0,
+                "MeanAbs_Jerk_Long": 2.0,
+                "MeanAbs_Jerk_Lat": 2.0,
+                "Max_Lateral_g": 3.0,
+                "Max_Longitudinal_g": 2.0,
+                "PC3": 0.0
+            }
+            
+            try:
+                # URL local de BentoML por defecto
+                # BentoML espera que el key del JSON coincida con el nombre del argumento de la funcion ('input_data')
+                wrapped_payload = {"input_data": payload}
+                response = requests.post("http://localhost:3000/predict_laptime", json=wrapped_payload, timeout=2)
+                if response.status_code == 200:
+                    data = response.json()
+                    st.success(f"⏱️ Predicción API: {data.get('predicted_laptime_s', 'N/A'):.3f} segundos")
+                else:
+                    st.error(f"Error API: {response.status_code} - {response.text}")
+            except Exception as e:
+                st.error(f"No se pudo conectar con BentoML. ¿Está corriendo el servidor? Error: {e}")
+                st.code("bentoml serve service:svc", language="bash")
+
 
 # Footer
 st.markdown("---")
