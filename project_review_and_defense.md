@@ -324,6 +324,49 @@ Tras la evaluación de múltiples algoritmos, **Random Forest** ha sido seleccio
 2.  **La Física importa**: Las features derivadas de principios físicos (Energía de neumático, Fuerzas G proyectadas en Frenet-Serret) resultaron ser los predictores más potentes (PC1 y PC3), superando a métricas crudas como "RPM" o "Speed".
 3.  **MLOps desbloquea valor**: La transición de notebooks estáticos a una API **BentoML** consumida por **Streamlit** transformó un "experimento científico" en un "producto de software" utilizable por ingenieros en pista.
 
-### 5.3 Veredicto Final
-La arquitectura desacoplada (Streamlit <-> BentoML) y la capacidad de entrenamiento interactivo ("Human-in-the-Loop") cumplen con los máximos estándares de un proyecto de Ciencia de Datos moderno. El sistema es modular, escalable y, sobre todo, ofrece explicaciones físicas interpretables para sus predicciones, elemento crítico en el mundo de la Fórmula 1.
+---
+
+## ANEXO 4: FLUJO DE DATOS Y ARTEFACTOS (DATA LINEAGE)
+
+Este diagrama detalla cómo se transforman los datos desde la API hasta el modelo final, garantizando trazabilidad total.
+
+### 1. Ingesta y Sincronización (Módulo 1)
+**Script**: `module1_ingestion.py`
+*   **Fuente**: API FastF1 (Cacheada en `.fastf1-cache/`)
+*   **Output por Sesión** (ej. `data/module1_ingestion/2024_Bahrain_Grand_Prix_R/`):
+    *   `telemetry_time_10hz.csv`: Telemetría cruda resampleada a 10Hz (eje temporal común).
+    *   `telemetry_distance_aligned.csv`: Telemetría interpolada por metros (eje espacial).
+    *   `laps_metadata.csv`: Tiempos de vuelta oficiales y compuestos de neumáticos.
+    *   `weather.csv`: Condiciones climáticas.
+
+### 2. Enriquecimiento de Señales (Módulo 2)
+**Script**: `module2_signals.py`
+*   **Input**: Lee los CSVs del Módulo 1 carpeta por carpeta.
+*   **Proceso**: Calcula derivadas (Jerk, Fuerzas G) y aplica suavizado Savitzky-Golay.
+*   **Output por Sesión** (en la misma carpeta):
+    *   `telemetry_time_10hz_enriched.csv`: Incluye nuevas columnas como `Speed_mps`, `AX_long`, `AY_lat`, `TireEnergyProxy`.
+    *   `lap_features_module2.csv`: **Dataset Agregado**. Una fila por vuelta con métricas resumen (ej. `MeanAbs_Jerk_Long`, `Energy_Index`).
+
+### 3. Consolidación y Estilo (Módulo 3)
+**Script**: `merge_lap_features.py` y `module3_pca_global_normalized.py`
+*   **Paso A (Merge)**: `merge_lap_features.py` itera todas las carpetas de sesiones, lee `lap_features_module2.csv` y concatena todo en:
+    *   **Output**: `data/module1_ingestion/all_lap_features.csv` (Dataset Maestro).
+*   **Paso B (PCA)**: `module3_pca_global_normalized.py` lee el Dataset Maestro.
+    *   **Proceso**: Normaliza métricas por evento (Z-Score por carrera) y aplica PCA.
+    *   **Output**:
+        *   `pca_scores_global_norm.csv`: Las 3 Componentes Principales (Estilo) para cada vuelta.
+        *   `pca_model_global_norm.json`: Pesos del modelo PCA para transformar nuevos datos.
+
+### 4. Modelado Predictivo (Módulo 4)
+**Script**: `module4_modeling.py`
+*   **Input**: Une `all_lap_features.csv` (Features físicas) con `pca_scores_global_norm.csv` (Features latentes).
+*   **Proceso**: Entrena modelos (Random Forest, XGBoost) con Cross-Validation.
+*   **Output**:
+    *   `best_model_module4.pkl`: Pipeline scikit-learn entrenado (Scaler + Encoder + Modelo).
+    *   `model_metrics_module4.json`: Resultados de MAE/R2.
+    *   `val_predictions_module4.csv`: Predicciones vs Realidad para validación.
+*   **BentoML**: Guarda el modelo en el store de BentoML (`f1_laptime_predictor:latest`) para ser servido por la API.
+
+---
+
 
