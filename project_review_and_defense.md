@@ -107,7 +107,7 @@ Esto modela el trabajo realizado por los neumáticos, correlacionando directamen
 
 ### Apartado: Metodología e Implementación
 
-#### 3.1 Arquitectura del Sistema y Procesamiento de Señales
+#### 4.1 Arquitectura del Sistema y Procesamiento de Señales
 El sistema se ha diseñado bajo los principios de **Industria 4.0**, implementando un gemelo digital (*Digital Twin*) del comportamiento dinámico del monoplaza. El núcleo de procesamiento consta de un pipeline dividido en cuatro etapas modulares:
 
 1.  **Ingesta y Sincronización Espacio-Temporal:** Se utiliza la librería `FastF1` como interfaz de extracción. Debido a la naturaleza heterogénea de los sensores (GPS a baja frecuencia vs. ECU), se aplica un algoritmo de *resampling* a 10 Hz para homogeneizar el dominio temporal. Adicionalmente, se implementa una interpolación espacial lineal (`module1_ingestion.py`), remapeando las series temporales a un dominio de distancia fija ($\Delta d = 1m$). Esto permite la comparación directa de telemetría entre vueltas ("Ghost Car Analysis") independientemente de las diferencias en velocidad de paso por curva.
@@ -118,52 +118,10 @@ El sistema se ha diseñado bajo los principios de **Industria 4.0**, implementan
 
 4.  **Predicción de Rendimiento (ML):** Se implementa un modelo de regresión (Gradient Boosting/Random Forest) validado mediante *K-Fold Cross Validation* para predecir tiempos de vuelta basándose en parámetros físicos y de gestión de neumáticos, logrando cuantificar el impacto de cada variable mediante valores SHAP.
 
-#### 3.2 Justificación Tecnológica
+#### 4.2 Justificación Tecnológica
 *   **Pandas & NumPy:** Elegidos por su capacidad de vectorización (SIMD), permitiendo realizar cálculos cinemáticos sobre millones de puntos de datos de telemetría en milisegundos, frente a bucles iterativos convencionales.
 *   **FastF1:** Proporciona acceso democratizado a datos de nivel industrial (Timing y Telemetría básica), sirviendo como capa de abstracción sobre la API oficial de la F1.
 *   **Streamlit:** Facilita la creación rápida de dashboards interactivos, vital para la visualización exploratoria de datos complejos sin el overhead de desarrollo frontend tradicional.
-
----
-
-## CAPÍTULO 5: SIMULACIÓN DE DEFENSA (PREGUNTAS FRECUENTES)
-
-### Pregunta 1: Sincronización y Frecuencia de Muestreo
-**Tribunal:** "Usted hace un resampling a 10 Hz. Sin embargo, los datos de GPS de la F1 suelen venir a 1-5 Hz y la telemetría del coche a mucho más. ¿No está inventando datos al interpolar a 10 Hz? ¿Cómo afecta esto a la precisión de sus derivadas de aceleración?"
-
-**Respuesta:**
-"Es una excelente observación sobre la teoría de señales. Efectivamente, al hacer upsampling a 10 Hz desde una fuente GPS de menor frecuencia, estamos introduciendo puntos interpolados que no existen en la medición original. Sin embargo, esto es una decisión de diseño deliberada por dos razones:
-1.  **Sincronización:** Necesitamos una base temporal común para cruzar datos de variables que vienen a frecuencias dispares (RPM vs Posición).
-2.  **Suavizado Implícito:** La interpolación lineal actúa como un filtro paso bajo rudimentario.
-Para mitigar el error en las derivadas (falsos picos de aceleración), no derivamos directamente los datos interpolados crudos. Aplicamos el filtro **Savitzky-Golay** *después* del resampling y *antes* de la derivación. Este filtro utiliza un ajuste polinómico local que es robusto frente a los artefactos generados por la interpolación lineal, permitiendo estimar la tendencia dinámica real del vehículo (la 'física') separándola del ruido de muestreo."
-
-### Pregunta 2: Veracidad y Ruido de Datos
-**Tribunal:** "Sus gráficos muestran picos de 5G en frenada. ¿Cómo valida que esos datos son reales y no ruido numérico, dado que usa datos públicos y no telemetría propietaria del equipo?"
-
-**Respuesta:**
-"La validación absoluta es imposible sin acceso a la telemetría interna del equipo (Atlas/McLaren). Sin embargo, realizamos una validación **por rango físico y consistencia**.
-1.  **Rango Físico:** Los monoplazas de F1 tienen límites físicos conocidos (~5-6G en frenada, ~1.2G en tracción). Si nuestro cálculo de derivadas arrojara 15G, sabríamos que es ruido. Nuestros resultados se mantienen dentro de la envolvente de rendimiento conocida de un F1 actual.
-2.  **Consistencia Espacial:** Comparamos vueltas consecutivas. Si un pico de 'G' aparece sistemáticamente en la misma coordenada de la pista (ej. curva 1) vuelta tras vuelta, es una característica de la pista/conducción. Si fuera ruido aleatorio, aparecería estocásticamente en diferentes puntos. Nuestros mapas de calor de Jerk muestran patrones consistentes en los vértices de curva, lo que valida fenomenológicamente el algoritmo."
-
-### Pregunta 3: Complejidad y Rendimiento
-**Tribunal:** "Su cálculo de 'Ghost Car' requiere alinear dos series temporales distintas. Si tuviera que procesar en tiempo real las 20 coches durante la carrera, ¿su implementación actual basada en Pandas aguantaría? ¿Qué cambiaría?"
-
-**Respuesta Senior:**
-"Nuestra implementación actual en Pandas es **Batch**, optimizada para análisis post-carrera. Funciona íntegramente en memoria (RAM). Para 20 coches en tiempo real, el cuello de botella sería la re-interpolación constante de DataFrames crecientes.
-Para escalar a tiempo real (Streaming):
-1.  Cambiaríamos la estructura de datos: Dejaríamos de usar DataFrames monolíticos para usar **Ventanas Deslizantes** o Buffers Circulares (ej. últimas 2 vueltas).
-2.  Optimización Algorítmica: La interpolación lineal (`np.interp`) es $O(N)$. Podríamos pre-calcular la malla espacial y usar *Look-up Tables* para reducir el coste de CPU.
-3.  **Infraestructura:** Pasaríamos de un script Python secuencial a un motor de procesamiento de streams como **Apache Flink** o **Spark Streaming**, donde cada coche es un flujo de eventos independiente procesado en paralelo."
-
-### Pregunta 4: MLOps y Despliegue (BentoML)
-**Tribunal:** "Ha implementado una API con BentoML. ¿Por qué BentoML y no simplemente Flask o FastAPI? ¿Y qué sentido tiene permitir reentrenamiento desde la UI?"
-
-**Respuesta:**
-"La elección de **BentoML** responde a la necesidad de estandarizar el ciclo de vida del modelo (MLOps) más allá de un simple servidor web:
-1.  **Empaquetado Unificado (Bento):** BentoML crea un contenedor autosuficiente que incluye no solo el código de la API, sino también el modelo serializado, las dependencias exactas de Python y la configuración del entorno. Esto elimina el problema de 'funciona en mi máquina' al pasar a producción (Docker/Kubernetes).
-2.  **Optimización de Inferencia:** A diferencia de un Flask plano, BentoML gestiona automáticamente colas de peticiones y *micro-batching* (Adaptive Batching), optimizando el throughput si recibiéramos ráfagas de telemetría de 20 coches a la vez.
-
-Sobre el **Reentrenamiento Interactivo**:
-Implementa el concepto de **'Human-in-the-loop'**. Los modelos de F1 degradan rápido porque las condiciones de pista y coche cambian cada fin de semana (Drift). Permitir que el ingeniero ajuste los hiperparámetros y reentrene el modelo *in-situ* desde el Dashboard (sin tocar código) acelera la adaptación del modelo a las nuevas condiciones del asfalto o actualizaciones aerodinámicas del coche, democratizando el uso de la IA para los ingenieros de pista que no son expertos en Python."
 
 ---
 
@@ -181,57 +139,74 @@ Esta sección profundiza en la lógica interna de los algoritmos de procesamient
 
 ### 1. Sincronización e Interpolación (Módulo 1)
 
-#### 1.1 Resampling Temporal (10 Hz)
-**Concepto**: La telemetría de F1 es asíncrona. El GPS puede reportar a 5Hz, el acelerómetro a 100Hz y el motor a 20Hz.
-**Qué hace `resample_telemetry_by_time`**:
-1.  **Alineación Temporal**: Resta el tiempo de inicio de sesión (`SessionTime - SessionTime[0]`) para tener un eje de tiempo relativo ($t=0$ al inicio de la vuelta).
-2.  **Upsampling/Downsampling**: Crea una malla temporal perfecta cada 0.1 segundos (`1/10Hz`).
-3.  **Algoritmo**: Utiliza interpolación lineal (`.interpolate()`).
-    *   *Justificación*: Frente a un "Zero-Order Hold" (mantener el valor anterior), la interpolación lineal asume cambios continuos, lo cual es físicamente correcto para velocidad y RPM (no cambian de golpe).
+#### 1.1 Sincronización Temporal (El "Reloj Maestro" a 10 Hz)
+**El Problema de la Asincronía:**
+Un coche de F1 es un sistema distribuido de sensores. El ECU reporta RPM a ~100Hz, mientras que el GPS público reporta posición a ~5Hz. Si intentáramos unir estos datos en una tabla simple, tendríamos miles de huecos (NaNs) porque los sensores no "hablan" al mismo tiempo.
 
-#### 1.2 Interpolación Espacial (`interpolate_telemetry_by_distance`)
-**Problema**: Dos pilotos toman tiempos distintos para recorrer la misma curva. Si comparamos por tiempo (segundo 10 vs segundo 10), uno puede estar en la curva y el otro ya saliendo.
-**Solución**: Cambiar el dominio de Tiempo ($t$) a Espacio ($d$).
-**Cómo funciona**:
-1.  Se define una "malla espacial" de 0m a la longitud de la vuelta, con pasos de 1 metro (`DISTANCE_STEP_METERS = 1.0`).
-2.  Para cada sensor (Velocidad, RPM), se calcula el valor en ese metro exacto, interpolando entre los dos puntos de GPS más cercanos.
-**Para qué**: Permite el análisis "Ghost Car". Podemos restar la velocidad de Verstappen y Hamilton en el metro 1500 exacto (entrada a curva 4), independientemente de cuánto tardaron en llegar ahí.
+**Nuestra Solución: Resampling a 10Hz**
+Creamos un "Reloj Maestro" virtual que hace *tic* cada 0.1 segundos.
+*   **¿Por qué 10 Hz?**
+    *   **Teorema de Nyquist-Shannon:** La fuente de datos más lenta y crítica es el GPS (~5 Hz). Para reconstruirla sin aliasing, necesitamos muestrear al menos al doble de su frecuencia (10 Hz).
+    *   **Eficiencia vs Precisión:** Subir a 100 Hz (como la ECU) sería inútil para la posición, pues estaríamos interpolando (inventando) 19 de cada 20 puntos, multiplicando el tamaño el dataset por 10 sin ganar información real espacial. 10 Hz es el punto óptimo (Sweet Spot) entre fidelidad a la fuente GPS y carga computacional.
+
+**Algoritmo:**
+1.  **Tiempo Relativo ($t_{rel}$):** $t_{rel} = t_{actual} - t_{inicio\_vuelta}$.
+2.  **Grilla Temporal:** Vector monotónico `[0.0, 0.1, 0.2, ...]`.
+3.  **Interpolación Lineal:** Trazamos rectas entre puntos conocidos.
+
+#### 1.2 Interpolación Espacial (Dominio $d$)
+**Por qué el "Ghost Car" falla por tiempo (Comparación Timestamp vs Distancia):**
+*   *Timestamp:* Comparar a Hamilton en $t=50s$ contra Verstappen en $t=50s$ es matemáticamente válido pero físicamente absurdo si Hamilton va 2 segundos más rápido. Estaríamos comparando una recta (Hamilton) con una curva (Verstappen).
+*   *Distancia:* Comparar a Hamilton en el metro 3000 contra Verstappen en el metro 3000 asegura que ambos enfrentan la **misma geometría de pista** (misma curva 8).
+
+**La Malla de Distancia Fija (Mesh):**
+*   **Definición:** Un vector estático de distancia `[0m, 1m, 2m, ..., L_pista]`.
+*   **¿Por qué 1 metro de resolución?**
+    *   La precisión del GPS civil/público oscila entre 1-3 metros.
+    *   *Hipótesis de Falsa Precisión:* Si bajáramos la malla a **0.5m o 0.1m**, estaríamos modelando "ruido de GPS" como si fuera trayectoria real. 1 metro es el límite de confianza de la fuente de datos.
+*   **Remapeo de Variable ($t \to d$):**
+    *   Invertimos la relación cinemática. En lugar de preguntar "¿Dónde estoy en el segundo 5?", preguntamos "¿A qué velocidad iba en el metro 500?". Usamos `np.interp` para proyectar todas las señales sobre esta cinta métrica universal.
+    *   **Manejo de Duplicados (`np.unique`):**
+        *   *Problema:* El GPS a veces reporta la misma distancia en dos timestamps consecutivos (coche parado o error de redondeo). Esto rompe la matemática de interpolación (falla la biyectividad).
+        *   *Solución:* Usamos `np.unique` para filtrar duplicados y garantizar que la distancia sea estrictamente monotónica creciente antes de interpolar.
+    *   **Analogía Visual (La Regla Gigante):**
+        *   Imagina una regla gigante en la pista con marcas exactas cada 1 metro: `[0m, 1m, 2m, ...]`.
+        *   **Input (Datos Reales):** Tenemos lecturas irregulares (ej. el coche pasó por 2.5m a 100km/h).
+        *   **Output (Ghost Car):** Descartamos la distancia original y calculamos: "Si pasó por 2.5m a 100km/h, ¿a qué velocidad debió pasar por la marca exacta de **2.0m** y **3.0m**?". Esto normaliza el eje X para todos los pilotos.
 
 ---
 
 ### 2. Procesamiento de Señales (Módulo 2)
 
-#### 2.1 Filtro Savitzky-Golay (`_savgol`)
-**Qué es**: Es un filtro digital smoothing (suavizado) que, a diferencia de la media móvil, preserva los momentos de alto orden (picos y valles estrechos).
-**Cómo funciona**: Para cada punto de la señal, ajusta un polinomio (parábola) mediante mínimos cuadrados a sus vecinos. El valor suavizado es el valor de ese polinomio en el punto central.
+#### 2.1 Filtro Savitzky-Golay (La solución al "Ruido Derivativo")
+**El Problema Matemático:**
+La diferenciación numérica (calcular aceleración restando velocidades) actúa como un **filtro pasa-altos**.
+*   Si la señal de velocidad tiene un pequeño "temblor" (jitter) de 1 km/h por error de GPS, al dividirlo por un $\Delta t$ muy pequeño (0.1s), el error se multiplica por 10 en la aceleración.
+*   Además, nuestra interpolación lineal (Capítulo 1) crea "picos" no diferenciables (esquinas) en los puntos de unión de las rectas. Derivar una esquina genera una aceleración infinita (Impulso de Dirac teórico).
 
-**Pregunta: ¿Por qué la ventana debe ser impar y mayor que el orden?**
-1.  **Impar**: Un filtro simétrico necesita un punto central y el mismo número de vecinos a izquierda y derecha. Ejemplo: Ventana 5 = 2 izquierda + **Centro** + 2 derecha. Si fuera par, no habría centro definido y el filtro introduciría un desplazamiento de fase (retardo temporal de media muestra).
-2.  **Mayor que el orden**: Matemáticamente, necesitas al menos $n+1$ puntos para ajustar un polinomio de grado $n$ (ej. 2 puntos para una recta, 3 para una parábola). Si `window <= poly`, el polinomio pasaría exactamente por todos los puntos (overfitting infinito), no suavizando nada (el ruido se mantiene intacto). Dejamos margen (`poly + 2` o más) para que el ajuste de mínimos cuadrados promedie el error (ruido).
+**La Solución Savitzky-Golay:**
+Ajustamos un polinomio local (parábola) sobre una ventana de 11 puntos ($1.1s$).
+*   **¿Qué resuelve?**
+    1.  **Suaviza el Jitter:** Promedia el ruido aleatorio del sensor.
+    2.  **Restaura la Diferenciabilidad:** Convierte las "esquinas" de la interpolación lineal en curvas suaves (Polinomio $C^1$ continuo), permitiendo calcular derivadas físicas realistas.
+    3.  **Preserva Picos:** A diferencia de una media móvil (que aplana todo), el polinomio respeta los picos reales de frenada (transiciones bruscas pero físicas).
 
-**Explicación de la función `_savgol`**:
-```python
-# Asegura que la ventana no sea más grande que los datos reales (crash prevention)
-window = min(window, series.size if series.size % 2 == 1 else series.size - 1)
+#### 2.2 Dinámica Vehicular y Vectores
+*   **Proyección de Vectores (Global a Local):**
+    *   Transformamos del Global Frame ($x, y$ GPS) al Local/Frenet Frame ($a_t, a_n$). Al piloto no le importa si acelera "al Norte", sino si acelera "hacia adelante".
+    *   **Aceleración Tangencial ($a_t$ - Longitudinal):** Responsable del cambio de rapidez (Frenado/Tracción). Se calcula como la proyección escalar (Producto Punto) de la aceleración sobre la velocidad:
+        $$ a_t = \frac{\vec{a} \cdot \vec{v}}{||\vec{v}||} = \frac{a_x v_x + a_y v_y}{\sqrt{v_x^2 + v_y^2}} $$
+    *   **Aceleración Normal ($a_n$ - Lateral):** Responsable del cambio de dirección (Viraje). Se calcula usando el "Producto Cruz 2D" (determinante):
+        $$ a_n = \frac{\vec{a} \times_{2D} \vec{v}}{||\vec{v}||} = \frac{a_x v_y - a_y v_x}{\sqrt{v_x^2 + v_y^2}} $$
+    *   *Nota de Implementación:* El signo de $a_n$ nos indica la dirección del giro (Izquierda vs Derecha), vital para analizar el comportamiento en curvas.
 
-# Asegura que la ventana sea mayor que el polinomio (Degree of Freedom check)
-# Si poly=2 (parábola), window mínimo debe ser 5 (impar > 3).
-window = max(window, poly + 2 if (poly + 2) % 2 == 1 else poly + 3)
-```
-Esto es "programación defensiva": garantiza que `scipy.signal.savgol_filter` nunca reciba argumentos matemáticamente imposibles, incluso si la vuelta es muy corta (ej. vuelta de salida de boxes incompleta).
-
-#### 2.2 Dinámica Vehicular (`_compute_dynamics_group`)
-Calcula la física del coche.
-1.  **Derivadas**: Calcula $v_x, v_y$ y luego $a_x, a_y$ usando `np.gradient` (diferencias finitas centradas).
-2.  **Proyección Vectorial**:
-    *   Los sensores dan aceleración en ejes X/Y globales (mapa). Al piloto le importa la aceleración relativa al coche (Frenada/Giro).
-    *   **Tangencial ($a_t$)**: Producto punto $\vec{a} \cdot \hat{v}$. Mide cuánto de la aceleración va en la dirección del movimiento (Frenada/Tracción).
-    *   **Normal ($a_n$)**: Producto cruz 2D. Mide la aceleración perpendicular (Fuerza centrífuga en curva).
-3.  **Jerk**: Es la derivada de la aceleración ($\Delta a / \Delta t$). Picos altos indican conducción brusca o "inputs" muy rápidos (patadas al freno).
-4.  **Energía Neumático**:
-    *   Potencia = Fuerza x Velocidad.
-    *   Fuerza ~ Masa x Aceleración (G).
-    *   Integramos `(|Lat_G| + |Long_G|) * Speed` en el tiempo. Suma toda la "violencia" aplicada al neumático ponderada por la velocidad (sufrimiento de la goma).
+#### 2.2 bis. Energy Proxy (Definición Física)
+He definido el **Índice de Energía del Neumático** basándome en el concepto físico de Trabajo y Potencia.
+*   **Potencia Instantánea ($P$):** Fuerza $\times$ Velocidad.
+    *   $F \propto$ Masa $\times$ Aceleración G combinada ($|G_{lat}| + |G_{long}|$).
+*   **Energía Total ($J$):** Integral de la Potencia en el tiempo.
+    $$ EnergyProxy = \int_{0}^{T} (|G_{lat}(t)| + |G_{long}(t)|) \cdot v(t) \cdot dt $$
+*   **Significado Físico:** Representa la cantidad total de "sufrimiento" (Joules mecánicos) que la carcasa del neumático ha tenido que gestionar. Correlaciona directamente con la temperatura generada y el desgaste abrasivo.
 
 #### 2.3 `enrich_telemetry_time`
 Es la función orquestadora que:
@@ -275,11 +250,13 @@ $$ x'_{i} = \frac{x_{i} - \mu_{carrera}}{\sigma_{carrera}} $$
 *   Si en otra pista frena con 8 pero la media es 8, su score es 0.
 *   **Resultado**: Eliminamos el "Efecto Pista". Solo queda cuánto se desvía el piloto del promedio de la parrilla ese día.
 
-#### 3.2 Dimensionalidad (PCA)
-Una vez normalizado, usamos PCA para condensar 10 métricas correlacionadas en 3 "Estilos":
-1.  **PC1 (Ritmo/Performance)**: Correlaciona con Tiempo de Vuelta y Velocidad.
-2.  **PC2 (Agresividad/Estilo)**: Correlaciona con Jerk y Entradas bruscas.
-3.  **PC3 (Gestión)**: Correlaciona con Energía de neumático y suavidad.
+#### 3.2 Interpretación de Componentes Principales
+Para interpretar el PCA con rigor científico y no simplemente "adivinar", inspeccionamos la matriz de **Eigenvectors (Loadings)**:
+1.  **PC1 (Correlación con Velocidad):** Vemos que las cargas más altas positivas son `Avg_Speed` y negativas `LapTime`. Esto define matemáticamente al PC1 como el eje de **"Ritmo Puro"**.
+2.  **PC2 (Correlación con Derivadas):** Las cargas dominantes son `MeanAbs_Jerk_Long` y `Brake_Aggression`. Esto no es subjetivo; el algoritmo nos dice que este componente varía cuando varían las fuerzas bruscas. Por tanto, es el eje de **"Agresividad Longitudinal"**.
+3.  **Evidencia:** Al plotear a los pilotos, Verstappen (rápido y agresivo) puntúa alto en ambos, mientras que pilotos conservadores puntúan bajo en PC2.
+
+---
 
 ---
 
@@ -293,8 +270,26 @@ Hemos diseñado un pipeline robusto a prueba de fallos en producción:
     *   **Numéricos (`StandardScaler`)**: Normaliza inputs como `TyreLife` o `FuelLoad` para que tengan media 0 y varianza 1. Vital para modelos lineales (Lasso) y ayuda a la convergencia en redes neuronales (si se usaran).
     *   **Categóricos (`OneHotEncoder`)**: Transforma `Compound` (SOFT, MEDIUM, HARD) y `Team` en vectores binarios. Usamos `handle_unknown='ignore'` para que si mañana aparece un compuesto nuevo (ej. "HYPERSOFT"), el modelo no rompa en producción (simplemente lo ignora).
 
-#### 4.2 Selección de Modelos (Benchmark)
-Comparamos múltiples familias de algoritmos usando **Cross-Validation (5-Fold)** para evitar overfitting:
+#### 4.2 Validación Cruzada (Cross-Validation 5-Fold)
+**El Concepto Teórico:**
+En lugar de hacer un solo examen final (Train/Test split 80/20), sometemos al modelo a **5 exámenes diferentes** rotando los datos.
+1.  Dividimos el dataset en 5 partes iguales (Folds).
+2.  Entrenamos con 4 partes y testeamos con la 1 restante.
+3.  Repetimos el proceso 5 veces, cambiando la parte de test cada vez.
+4.  El resultado final es el **promedio** de los 5 errores.
+
+**¿Por qué lo usamos?**
+*   **Robustez Estadística:** Evita que tengamos "suerte" eligiendo un test set fácil. Si el modelo funciona bien en los 5 folds, es estable.
+*   **Detección de Overfitting:** Si el modelo memoriza datos, fallará estrepitosamente en al menos uno de los folds.
+
+**Aplicación en el Proyecto (`KFold(shuffle=True)`):**
+En `module4_modeling.py`, usamos `shuffle=True`.
+*   *Nota Técnica:* Aunque la F1 es temporal, aquí tratamos cada vuelta como un **"Experimento Físico Independiente"**.
+*   Queremos que el modelo aprenda: *"Si Neumático=Viejo y Gasolina=Baja -> Tiempo=X"*.
+*   Al barajar (shuffle), validamos que el modelo aprende la **física del coche** (la relación variables-tiempo) y no simplemente la secuencia cronológica de las vueltas.
+
+#### 4.3 Selección de Modelos (Benchmark)
+Comparamos múltiples familias de algoritmos:
 1.  **Lasso (Baseline Lineal)**: Nos dice cuánto podemos explicar con relaciones simples. Si $R^2$ es bajo, confirma que el problema es no-lineal.
 2.  **Random Forest / XGBoost (No-Lineales)**:
     *   **Por qué ganan**: Capturan interacciones complejas automáticamente. Ejemplo: Un neumático blando (`SOFT`) degrada rápido (`TyreLife` alto = tiempo lento), pero un neumático duro (`HARD`) es más constante. Un modelo lineal sumaría `Beta_TyreLife` + `Beta_Compound`, pero el árbol puede hacer *splits*: "SI Compound=SOFT Y TyreLife>10 ENTONCES Lento".
