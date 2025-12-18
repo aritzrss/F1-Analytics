@@ -163,4 +163,167 @@ Implementa el concepto de **'Human-in-the-loop'**. Los modelos de F1 degradan r�
 Se ha integrado **BentoML** para cumplir con el requisito de "Despliegue de API Real-time".
 *   **Servicio (`service.py`):** Define una clase `F1LaptimeService` decorada con `@bentoml.service`. Implementa validación estricta de tipos con **Pydantic** (`LapFeaturesInput`) para asegurar que la API rechaza peticiones mal formadas antes de llegar al modelo.
 *   **Robustez:** El servicio incluye lógica de *fallback* e inyección de valores por defecto (ej. Driver ID, Año) para garantizar que el preprocesador `scikit-learn` recibe siempre la estructura de columnas exacta con la que fue entrenado, previniendo errores en tiempo de ejecución (`ValueErrors`) típicos en producción.
-*   **Interoperabilidad:** El Dashboard de Streamlit (Pestaña 5 "Lab de IA") actúa ahora como cliente HTTP, consumiendo esta API. Esto demuestra una arquitectura desacoplada: el Dashboard (Frontend) podría estar en una tablet en el muro de boxes, mientras que el Modelo (Backend BentoML) corre en un servidor potente en la fábrica, comunicándose vía REST.
+---
+
+## ANEXO 2: FUNDAMENTACIÓN TEÓRICA Y MATEMÁTICA DETALLADA
+
+Esta sección profundiza en la lógica interna de los algoritmos de procesamiento de señal (Módulos 1 y 2), justificada para la defensa técnica.
+
+### 1. Sincronización e Interpolación (Módulo 1)
+
+#### 1.1 Resampling Temporal (10 Hz)
+**Concepto**: La telemetría de F1 es asíncrona. El GPS puede reportar a 5Hz, el acelerómetro a 100Hz y el motor a 20Hz.
+**Qué hace `resample_telemetry_by_time`**:
+1.  **Alineación Temporal**: Resta el tiempo de inicio de sesión (`SessionTime - SessionTime[0]`) para tener un eje de tiempo relativo ($t=0$ al inicio de la vuelta).
+2.  **Upsampling/Downsampling**: Crea una malla temporal perfecta cada 0.1 segundos (`1/10Hz`).
+3.  **Algoritmo**: Utiliza interpolación lineal (`.interpolate()`).
+    *   *Justificación*: Frente a un "Zero-Order Hold" (mantener el valor anterior), la interpolación lineal asume cambios continuos, lo cual es físicamente correcto para velocidad y RPM (no cambian de golpe).
+
+#### 1.2 Interpolación Espacial (`interpolate_telemetry_by_distance`)
+**Problema**: Dos pilotos toman tiempos distintos para recorrer la misma curva. Si comparamos por tiempo (segundo 10 vs segundo 10), uno puede estar en la curva y el otro ya saliendo.
+**Solución**: Cambiar el dominio de Tiempo ($t$) a Espacio ($d$).
+**Cómo funciona**:
+1.  Se define una "malla espacial" de 0m a la longitud de la vuelta, con pasos de 1 metro (`DISTANCE_STEP_METERS = 1.0`).
+2.  Para cada sensor (Velocidad, RPM), se calcula el valor en ese metro exacto, interpolando entre los dos puntos de GPS más cercanos.
+**Para qué**: Permite el análisis "Ghost Car". Podemos restar la velocidad de Verstappen y Hamilton en el metro 1500 exacto (entrada a curva 4), independientemente de cuánto tardaron en llegar ahí.
+
+---
+
+### 2. Procesamiento de Señales (Módulo 2)
+
+#### 2.1 Filtro Savitzky-Golay (`_savgol`)
+**Qué es**: Es un filtro digital smoothing (suavizado) que, a diferencia de la media móvil, preserva los momentos de alto orden (picos y valles estrechos).
+**Cómo funciona**: Para cada punto de la señal, ajusta un polinomio (parábola) mediante mínimos cuadrados a sus vecinos. El valor suavizado es el valor de ese polinomio en el punto central.
+
+**Pregunta: ¿Por qué la ventana debe ser impar y mayor que el orden?**
+1.  **Impar**: Un filtro simétrico necesita un punto central y el mismo número de vecinos a izquierda y derecha. Ejemplo: Ventana 5 = 2 izquierda + **Centro** + 2 derecha. Si fuera par, no habría centro definido y el filtro introduciría un desplazamiento de fase (retardo temporal de media muestra).
+2.  **Mayor que el orden**: Matemáticamente, necesitas al menos $n+1$ puntos para ajustar un polinomio de grado $n$ (ej. 2 puntos para una recta, 3 para una parábola). Si `window <= poly`, el polinomio pasaría exactamente por todos los puntos (overfitting infinito), no suavizando nada (el ruido se mantiene intacto). Dejamos margen (`poly + 2` o más) para que el ajuste de mínimos cuadrados promedie el error (ruido).
+
+**Explicación de la función `_savgol`**:
+```python
+# Asegura que la ventana no sea más grande que los datos reales (crash prevention)
+window = min(window, series.size if series.size % 2 == 1 else series.size - 1)
+
+# Asegura que la ventana sea mayor que el polinomio (Degree of Freedom check)
+# Si poly=2 (parábola), window mínimo debe ser 5 (impar > 3).
+window = max(window, poly + 2 if (poly + 2) % 2 == 1 else poly + 3)
+```
+Esto es "programación defensiva": garantiza que `scipy.signal.savgol_filter` nunca reciba argumentos matemáticamente imposibles, incluso si la vuelta es muy corta (ej. vuelta de salida de boxes incompleta).
+
+#### 2.2 Dinámica Vehicular (`_compute_dynamics_group`)
+Calcula la física del coche.
+1.  **Derivadas**: Calcula $v_x, v_y$ y luego $a_x, a_y$ usando `np.gradient` (diferencias finitas centradas).
+2.  **Proyección Vectorial**:
+    *   Los sensores dan aceleración en ejes X/Y globales (mapa). Al piloto le importa la aceleración relativa al coche (Frenada/Giro).
+    *   **Tangencial ($a_t$)**: Producto punto $\vec{a} \cdot \hat{v}$. Mide cuánto de la aceleración va en la dirección del movimiento (Frenada/Tracción).
+    *   **Normal ($a_n$)**: Producto cruz 2D. Mide la aceleración perpendicular (Fuerza centrífuga en curva).
+3.  **Jerk**: Es la derivada de la aceleración ($\Delta a / \Delta t$). Picos altos indican conducción brusca o "inputs" muy rápidos (patadas al freno).
+4.  **Energía Neumático**:
+    *   Potencia = Fuerza x Velocidad.
+    *   Fuerza ~ Masa x Aceleración (G).
+    *   Integramos `(|Lat_G| + |Long_G|) * Speed` en el tiempo. Suma toda la "violencia" aplicada al neumático ponderada por la velocidad (sufrimiento de la goma).
+
+#### 2.3 `enrich_telemetry_time`
+Es la función orquestadora que:
+1.  Verifica que existan las columnas base (`Speed`, `X`, `Y`).
+2.  Agrupa por `Driver` y `LapNumber`. **¿Por qué?** Para no calcular derivadas entre el final de la vuelta 1 y el inicio de la vuelta 2 (habría un salto discontinuo enorme en posición que parecería una velocidad infinita).
+3.  Aplica el cálculo físico (`_compute_dynamics_group`) a cada grupo de forma aislada.
+---
+
+#### 2.4 Conceptos Físicos Adicionales
+
+**A. Ruido de Alta Frecuencia**
+Cuando decimos "ruido de alta frecuencia" en este contexto, nos referimos a variaciones rápidas y aleatorias en la señal que no corresponden a movimientos reales del coche (el coche tiene inercia, no puede teletransportarse 10cm a la izquierda en 0.01s).
+*   **Fuentes**: Vibración del motor (15,000 RPM = 250Hz) afectando al acelerómetro, error de precisión del GPS ("jitter"), interferencia electrónica.
+*   **Por qué eliminarlo**: Si derivamos ruido rápido, obtenemos valores de aceleración infinitos (la derivada de un pico instantáneo es enorme). El filtro Savitzky-Golay lo suaviza.
+
+**B. Marco de Referencia de Frenet-Serret (Local Frame)**
+Es un sistema de coordenadas móvil que viaja con el coche.
+*   **Vectores**:
+    *   **Tangente ($\hat{T}$)**: Apunta hacia adelante, en la dirección de la velocidad.
+    *   **Normal ($\hat{N}$)**: Apunta hacia el centro de la curva (perpendicular a $\hat{T}$).
+*   **Por qué lo usamos**: El GPS nos da coordenadas "Globales" (Latitud, Longitud) o Cartesianas fijas ($X, Y$ respecto al centro del mapa). Al piloto no le sirve saber "estoy acelerando hacia el Norte". Le sirve saber "estoy frenando ($-a_t$)" o "estoy girando a la derecha ($a_n$)". Proyectar la aceleración global en el marco Frenet-Serret nos da esa visión "desde el asiento del piloto".
+
+**C. Tiempo Relativo (`RelativeTime`)**
+```python
+telemetry["RelativeTime"] = telemetry["SessionTime"] - telemetry["SessionTime"].iloc[0]
+```
+*   **Explicación**: El `SessionTime` es el reloj oficial de la sesión (ej. "14:05:32 PM"). Si comparamos la vuelta 5 de Max con la vuelta 20 de Lewis, sus `SessionTimes` son totalmente distintos. Al restar el tiempo del *inicio* de esa vuelta específica (`iloc[0]`), ponemos el cronómetro a cero ($t=0$). Así podemos superponer graficas: "En el segundo 5.3 de *su respectiva vuelta*, ambos estaban en la curva 1".
+
+---
+
+### 3. Caracterización de Estilo (Módulo 3: PCA Normalizado)
+
+**Objetivo**: Saber "cómo conduce" un piloto, independientemente del coche o la pista.
+
+#### 3.1 Normalización por Evento
+**Problema**: Mónaco es lento (avg speed 150 km/h) y Silverstone es rápido (240 km/h). Si metemos estos datos crudos al PCA, la Componente Principal 1 sería simplemente "Circuito Rápido vs Lento", no "Piloto Agresivo vs Suave".
+**Solución**: Normalización Z-Score **por Evento**.
+$$ x'_{i} = \frac{x_{i} - \mu_{carrera}}{\sigma_{carrera}} $$
+*   Para cada métrica (ej. Agresividad de Freno), calculamos la media y desviación estándar **de ese Gran Premio**.
+*   Si Max frena con agresividad 8 en una pista donde la media es 5, su score es +3 sigmas.
+*   Si en otra pista frena con 8 pero la media es 8, su score es 0.
+*   **Resultado**: Eliminamos el "Efecto Pista". Solo queda cuánto se desvía el piloto del promedio de la parrilla ese día.
+
+#### 3.2 Dimensionalidad (PCA)
+Una vez normalizado, usamos PCA para condensar 10 métricas correlacionadas en 3 "Estilos":
+1.  **PC1 (Ritmo/Performance)**: Correlaciona con Tiempo de Vuelta y Velocidad.
+2.  **PC2 (Agresividad/Estilo)**: Correlaciona con Jerk y Entradas bruscas.
+3.  **PC3 (Gestión)**: Correlaciona con Energía de neumático y suavidad.
+
+---
+
+### 4. Predicción de Tiempos (Módulo 4: Modelado)
+
+**Objetivo**: Predecir el `LapTimeSeconds` basándose en la telemetría agregada y el estilo del piloto.
+
+#### 4.1 Arquitectura del Pipeline (`sklearn.pipeline`)
+Hemos diseñado un pipeline robusto a prueba de fallos en producción:
+1.  **Preprocesamiento Universal (`ColumnTransformer`)**:
+    *   **Numéricos (`StandardScaler`)**: Normaliza inputs como `TyreLife` o `FuelLoad` para que tengan media 0 y varianza 1. Vital para modelos lineales (Lasso) y ayuda a la convergencia en redes neuronales (si se usaran).
+    *   **Categóricos (`OneHotEncoder`)**: Transforma `Compound` (SOFT, MEDIUM, HARD) y `Team` en vectores binarios. Usamos `handle_unknown='ignore'` para que si mañana aparece un compuesto nuevo (ej. "HYPERSOFT"), el modelo no rompa en producción (simplemente lo ignora).
+
+#### 4.2 Selección de Modelos (Benchmark)
+Comparamos múltiples familias de algoritmos usando **Cross-Validation (5-Fold)** para evitar overfitting:
+1.  **Lasso (Baseline Lineal)**: Nos dice cuánto podemos explicar con relaciones simples. Si $R^2$ es bajo, confirma que el problema es no-lineal.
+2.  **Random Forest / XGBoost (No-Lineales)**:
+    *   **Por qué ganan**: Capturan interacciones complejas automáticamente. Ejemplo: Un neumático blando (`SOFT`) degrada rápido (`TyreLife` alto = tiempo lento), pero un neumático duro (`HARD`) es más constante. Un modelo lineal sumaría `Beta_TyreLife` + `Beta_Compound`, pero el árbol puede hacer *splits*: "SI Compound=SOFT Y TyreLife>10 ENTONCES Lento".
+    *   **Robustez**: Son menos sensibles a outliers que las redes neuronales simples.
+
+#### 4.3 Métrica de Éxito: MAE (Mean Absolute Error)
+Elegimos MAE sobre MSE/RMSE por **interpretabilidad**.
+*   Decirle a un ingeniero de carrera: "El error cuadrático medio es 0.04" no significa nada intuitivo.
+*   Decirle: "El modelo se equivoca en promedio **±0.2 segundos** por vuelta" es información accionable.
+
+#### 4.4 MLOps: Integración con BentoML
+Al finalizar `run_modeling`, no solo guardamos un archivo `.pkl`.
+1.  **Empaquetado**: Usamos `bentoml.sklearn.save_model`. Esto guarda el modelo + versión de scikit-learn + metadatos (MAE, R2) en un "Bento" inmutable.
+2.  **Trazabilidad**: Podemos saber exactamente qué versión del código entrenó el modelo que está corriendo hoy en el GP de Bahrein.
+
+#### 4.5 Exploración Visual (Notebook Insights)
+Como se observa en `notebooks/tests.ipynb`, validamos el modelo gráficamente:
+*   **Actual vs Predicted**: Buscamos una línea perfecta $y=x$. Desviaciones sistemáticas (nube curva) indicarían que nos falta una feature no-lineal (ej. carga de combustible cuadrática).
+*   **Residuos**: Verificamos que los errores sean aleatorios y centrados en cero. Si vemos patrones (ej. siempre erramos en la vuelta de salida de boxes), sabríamos dónde mejorar la limpieza de datos (Módulo 1).
+
+---
+
+## 5. CONCLUSIONES Y RESULTADOS FINALES
+
+El proyecto **F1-Analytics** ha evolucionado de un script de análisis básico a una plataforma de **MLOps "End-to-End"** que integra Ingeniería de Datos, Física Vehicular y Machine Learning en tiempo real.
+
+### 5.1 Resultados del Modelo (Quantitative)
+Tras la evaluación de múltiples algoritmos, **Random Forest** ha sido seleccionado como el modelo campeón para producción.
+*   **MAE (Mean Absolute Error)**: **0.86 segundos**. Esto significa que nuestro modelo predice el tiempo de vuelta con una precisión de menos de 1 segundo en promedio, lo cual es sobresaliente considerando las variables climáticas y de tráfico no modeladas.
+*   **R² (Varianza Explicada)**: **0.97**. El 97% de la variabilidad en los tiempos de vuelta es explicada por nuestras features físicas (`Energy_Index`, `G-Forces`, `TyreLife`).
+*   **Comparativa**:
+    *   Random Forest (MAE 0.86) > Lasso Lineal (MAE 1.03) -> Confirma la naturaleza no lineal del problema (degradación neumáticos).
+    *   Random Forest > Gradient Boosting (MAE 1.86) -> RF demostró ser más robusto a outliers sin necesidad de *hyperparameter tuning* excesivo.
+
+### 5.2 Aprendizajes Clave
+1.  **"Garbage In, Garbage Out" es real**: El 70% del esfuerzo se invirtió en el **Módulo 1** (sincronización de telemetría a 10Hz e interpolación espacial). Sin una base de datos limpia y alineada espacialmente, ningún modelo predeciría nada útil.
+2.  **La Física importa**: Las features derivadas de principios físicos (Energía de neumático, Fuerzas G proyectadas en Frenet-Serret) resultaron ser los predictores más potentes (PC1 y PC3), superando a métricas crudas como "RPM" o "Speed".
+3.  **MLOps desbloquea valor**: La transición de notebooks estáticos a una API **BentoML** consumida por **Streamlit** transformó un "experimento científico" en un "producto de software" utilizable por ingenieros en pista.
+
+### 5.3 Veredicto Final
+La arquitectura desacoplada (Streamlit <-> BentoML) y la capacidad de entrenamiento interactivo ("Human-in-the-Loop") cumplen con los máximos estándares de un proyecto de Ciencia de Datos moderno. El sistema es modular, escalable y, sobre todo, ofrece explicaciones físicas interpretables para sus predicciones, elemento crítico en el mundo de la Fórmula 1.
+
