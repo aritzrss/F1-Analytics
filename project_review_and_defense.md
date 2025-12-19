@@ -131,6 +131,8 @@ El sistema se ha diseñado bajo los principios de **Industria 4.0**, implementan
 Se ha integrado **BentoML** para cumplir con el requisito de "Despliegue de API Real-time".
 *   **Servicio (`service.py`):** Define una clase `F1LaptimeService` decorada con `@bentoml.service`. Implementa validación estricta de tipos con **Pydantic** (`LapFeaturesInput`) para asegurar que la API rechaza peticiones mal formadas antes de llegar al modelo.
 *   **Robustez:** El servicio incluye lógica de *fallback* e inyección de valores por defecto (ej. Driver ID, Año) para garantizar que el preprocesador `scikit-learn` recibe siempre la estructura de columnas exacta con la que fue entrenado, previniendo errores en tiempo de ejecución (`ValueErrors`) típicos en producción.
+
+*   **Ejecucion:** Para ejecutar el bentoml, ejecuta '''uv run feature_extraction/module4_modeling.py''' si estás usando linux, para cargar el modelo bentoml en la lista de modelos. Después, ejecuta '''bentoml serve service.py:F1LaptimeService --reload'''
 ---
 
 ## ANEXO 2: FUNDAMENTACIÓN TEÓRICA Y MATEMÁTICA DETALLADA

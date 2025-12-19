@@ -3,6 +3,10 @@ from pydantic import BaseModel
 import pandas as pd
 import numpy as np
 
+'''
+Para ejecutar el servicio, ejecuta en la linea de comandos [ uv run feature_extraction/module4_modeling.py ],
+esto carga el servicio en la lista de modelos de bento, después ejecuta [ bentoml serve service.py:F1LaptimeService --reload ]
+'''
 # Definir esquema de entrada con Pydantic
 class LapFeaturesInput(BaseModel):
     SessionType: str = "R"
